@@ -38,13 +38,13 @@ float getDissonanceAt(float x, float z) {
     float coeff1;
     float coeff2;
 
-    for (int i = 0; i < 3; i++) {
-      if (i / numPartials == 1) {coeff1 = x;} 
-      else if (i / numPartials == 2) {coeff1 = z;}
+    for (int i = 0; i < 2; i++) {
+      if (i / numPartials == 0) {coeff1 = x;} 
+      else if (i / numPartials == 1) {coeff1 = z;}
       else {coeff1 = 1.0;}
       for (int j = i + 1; j < numVoices * numPartials;j++) {
-        if (j / numPartials == 1) {coeff1 = x;} 
-        else if (j / numPartials == 2) {coeff1 = z;}
+        if (j / numPartials == 0) {coeff2 = x;} 
+        else if (j / numPartials == 1) {coeff2 = z;}
         else {coeff2 = 1.0;}
         totalDissonance += pairwiseDissonance(
             voiceFreqs[i] * coeff1, voiceAmplitudes[i],
@@ -79,65 +79,77 @@ void main() {
     vec3 rayDir = normalize((invView * vec4(ray_eye.xyz, 0.0)).xyz);
     vec3 rayOrigin = cameraPos;
 
-    /* --- Raymarching Loop --- */
-    float t = 0.0;
-    vec3 p = rayOrigin;
-    bool hit = false;
+    // Bounding sphere pre-check
+    vec3 sphereCenter = vec3(2.0, 0.5, 2.0);
+    float sphereRadius = 3.0;
+    vec3 oc = rayOrigin - sphereCenter;
+    float b = dot(oc, rayDir);
+    float c = dot(oc, oc) - sphereRadius*sphereRadius;
+    float discriminant = b*b - c;
 
-    //assume we are basically always looking down
-
-    if (rayDir.y < 0) {
-      float t_xz_plane = -rayOrigin.y / rayDir.y;
-      if (t_xz_plane > 0.0) {
-        t = 0.75 * t_xz_plane;
-      }
-    }
-
-    p = rayOrigin + t * rayDir;
-
-    for (int i = 0; i < 8; i++) {
-      float h_curr = p.y - getDissonanceAt(p.x, p.z);
-      // if (i == 3 && h_curr > 0.0 && hit == false)
-      //   break;
-      if (h_curr < 0.0)
-      {
-        t = t + -0.5 * t;
-        hit = true;
-      }
-      else if (h_curr > 0.0) {
-        t = t + 0.5 * t;
-      }
-      p = rayOrigin + t * rayDir;
-    }
-
-
-    // for (int i = 0; i < 64; i++) {
-    //     t += max(0.01, h_prev * 0.8);
-    //     p = rayOrigin + t * rayDir;
-    //     if (p.x > 4.0 || p.x < 0 || p.z > 4.0 || p.z < 0)
-    //       break;
-    //     float h_curr = p.y - getDissonanceAt(p.x, p.z);
-    //     if (h_curr * h_prev < 0.0) {
-    //         hit = true;
-    //         break;
-    //     }
-    //     h_prev = h_curr;
-    // }
-
-    /* --- Coloring and Lighting --- */
-    if (hit) {
-        vec3 normal = getNormal(p.x, p.z);
-        vec3 lightDir = normalize(vec3(0.5, 0.8, -0.5));
-        float diffuse = max(0.0, dot(normal, lightDir));
-        vec3 color1 = vec3(0.1, 0.2, 0.8);
-        vec3 color2 = vec3(1.0, 0.3, 0.2);
-        vec3 surfaceColor = mix(color1, color2, clamp(p.y, 0.0, 1.0));
-        float fog = 1.0 - clamp(t / 200.0, 0.0, 1.0);
-        vec3 finalRgb = surfaceColor * (diffuse * 0.8 + 0.2);
-        finalColor = vec4(mix(vec3(0.0), finalRgb, fog), 1.0);
-        // finalColor = vec4(mix(vec3(0.0), surfaceColor, fog), 1.0);
-        // finalColor = vec4(finalRgb, 1.0);
-    } else {
+    if (discriminant < 0.0) {
         finalColor = vec4(0.05, 0.05, 0.1, 1.0);
-   }
+    } else {
+        /* --- Raymarching Loop --- */
+        float t = -b - sqrt(discriminant);
+        t = max(0.0, t); // Start at the sphere entry point, but not behind the camera
+
+        vec3 p = rayOrigin + t * rayDir;
+        float h_prev = p.y - getDissonanceAt(p.x, p.z);
+        bool hit = false;
+        float min_h = h_prev;
+
+        for (int i = 0; i < 32; i++) {
+            float step = max(0.01, abs(h_prev) * 0.85) * (1.0 + t * 0.015);
+            float t_curr = t + step;
+            p = rayOrigin + t_curr * rayDir;
+            float h_curr = p.y - getDissonanceAt(p.x, p.z);
+            if (p.x > 4.0 || p.x < 0.0 || p.z > 4.0 || p.z < 0.0)
+              break;
+
+            min_h = min(min_h, h_curr);
+            if (h_curr > min_h + 0.5) break; // Divergence check
+
+            if (h_curr * h_prev < 0.0) {
+                // Refinement phase: Adaptive binary search
+                float t_lower = t;
+                float t_upper = t_curr;
+                int refinement_steps = int(max(2.0, 5.0 - t * 0.1));
+                for (int j = 0; j < refinement_steps; j++) {
+                    float t_mid = (t_lower + t_upper) / 2.0;
+                    vec3 p_mid = rayOrigin + t_mid * rayDir;
+                    float h_mid = p_mid.y - getDissonanceAt(p_mid.x, p_mid.z);
+                    if (h_mid * h_prev < 0.0) {
+                        t_upper = t_mid;
+                    } else {
+                        t_lower = t_mid;
+                    }
+                }
+                t = (t_lower + t_upper) / 2.0;
+                p = rayOrigin + t * rayDir;
+                hit = true;
+                break;
+            }
+
+            t = t_curr;
+            h_prev = h_curr;
+            if (t > 200.0) break;
+        }
+
+        /* --- Coloring and Lighting --- */
+        if (hit) {
+            // vec3 normal = getNormal(p.x, p.z);
+            // vec3 lightDir = normalize(vec3(0.5, 0.8, -0.5));
+            // float diffuse = max(0.0, dot(normal, lightDir));
+            vec3 color1 = vec3(0.1, 0.2, 0.8);
+            vec3 color2 = vec3(1.0, 0.3, 0.2);
+            vec3 surfaceColor = mix(color1, color2, clamp(p.y, 0.0, 1.0));
+            float fog = 1.0 - clamp(t / 200.0, 0.0, 1.0);
+            // vec3 finalRgb = surfaceColor * (diffuse * 0.8 + 0.2);
+            // finalColor = vec4(mix(vec3(0.0), finalRgb, fog), 1.0);
+            finalColor = vec4(mix(vec3(0.0), surfaceColor, fog), 1.0);
+        } else {
+            finalColor = vec4(0.05, 0.05, 0.1, 1.0);
+       }
+    }
 }

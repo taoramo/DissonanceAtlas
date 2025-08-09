@@ -57,11 +57,11 @@ int main(void) {
     Voice voices[NUM_VOICES] = { 0 };
     float base_freq = 220.0f;
 
-    /* Voice 0: Fixed Base Frequency */
+    /* Voice 0: Dynamic X-axis */
     GenerateHarmonicSeries(&voices[0], base_freq, 1.0f, 8, MAX_PARTIALS);
-    /* Voice 1: Dynamic X-axis. Base freq here is a placeholder for the coefficient. */
-    GenerateHarmonicSeries(&voices[1], base_freq, 1.0f, 8, MAX_PARTIALS);
     /* Voice 2: Dynamic Z-axis. */
+    GenerateHarmonicSeries(&voices[1], base_freq, 1.0f, 8, MAX_PARTIALS);
+    /* Voice 2: base_freq */
     GenerateHarmonicSeries(&voices[2], base_freq, 1.0f, 8, MAX_PARTIALS);
 
     /* Flatten voice data for the shader */
@@ -78,7 +78,7 @@ int main(void) {
     }
 
     float otherVoicesDissonance = 0;
-    for (int i = 3 * numPartials; i < numVoices * numPartials; i++) {
+    for (int i = 2 * numPartials; i < numVoices * numPartials; i++) {
         for (int j = i + 1; j < numVoices * numPartials; j++) {
           otherVoicesDissonance += pairwiseDissonance(voiceFreqs[i], voiceAmplitudes[i], voiceFreqs[j], voiceAmplitudes[j]);
         }
