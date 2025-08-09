@@ -41,14 +41,20 @@ int main(void) {
     int invViewLoc = GetShaderLocation(shader, "invView");
     int invProjLoc = GetShaderLocation(shader, "invProj");
     int cameraPosLoc = GetShaderLocation(shader, "cameraPos");
-    int numVoicesLoc = GetShaderLocation(shader, "numVoices");
-    int numPartialsLoc = GetShaderLocation(shader, "numPartials");
-    int voiceFreqsLoc = GetShaderLocation(shader, "voiceFreqs");
-    int voiceAmplitudesLoc = GetShaderLocation(shader, "voiceAmplitudes");
-    int otherVoicesDissonanceLoc = GetShaderLocation(shader, "otherVoicesDissonance");
     int viewIntsLoc = GetShaderLocation(shader, "viewInts");
+    int heightmapLoc = GetShaderLocation(shader, "heightmap");
+    int surfaceDimensionsLoc = GetShaderLocation(shader, "surfaceDimensions");
+
+    Shader bakingShader = LoadShader(0, "baking.fs");
+    int baking_numVoicesLoc = GetShaderLocation(bakingShader, "numVoices");
+    int baking_numPartialsLoc = GetShaderLocation(bakingShader, "numPartials");
+    int baking_voiceFreqsLoc = GetShaderLocation(bakingShader, "voiceFreqs");
+    int baking_voiceAmplitudesLoc = GetShaderLocation(bakingShader, "voiceAmplitudes");
+    int baking_otherVoicesDissonanceLoc = GetShaderLocation(bakingShader, "otherVoicesDissonance");
+    int baking_viewIntsLoc = GetShaderLocation(bakingShader, "viewInts");
 
     RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
+    RenderTexture2D heightmapTexture = LoadRenderTexture(screenWidth, screenHeight);
 
     /* --- Voice Data Setup --- */
     //numVoices is number of voices other than base, x, z
@@ -152,15 +158,29 @@ int main(void) {
         Matrix invView = MatrixInvert(view);
         Matrix invProj = MatrixInvert(proj);
 
+        // --- Pass 1: Bake heightmap ---
+        BeginTextureMode(heightmapTexture);
+        ClearBackground(BLANK);
+        BeginShaderMode(bakingShader);
+        // Set baking shader uniforms
+        SetShaderValue(bakingShader, baking_numVoicesLoc, &numVoices, SHADER_UNIFORM_INT);
+        SetShaderValue(bakingShader, baking_numPartialsLoc, &numPartials, SHADER_UNIFORM_INT);
+        SetShaderValueV(bakingShader, baking_voiceFreqsLoc, voiceFreqs, SHADER_UNIFORM_FLOAT, numVoices * numPartials);
+        SetShaderValueV(bakingShader, baking_voiceAmplitudesLoc, voiceAmplitudes, SHADER_UNIFORM_FLOAT, numVoices * numPartials);
+        SetShaderValue(bakingShader, baking_otherVoicesDissonanceLoc, &otherVoicesDissonance, SHADER_UNIFORM_FLOAT);
+        float bakingViewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
 
+        DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
+        EndShaderMode();
+        EndTextureMode();
+
+        // --- Pass 2: Render scene ---
         SetShaderValueMatrix(shader, invViewLoc, invView);
         SetShaderValueMatrix(shader, invProjLoc, invProj);
         SetShaderValue(shader, cameraPosLoc, &camera.position, SHADER_UNIFORM_VEC3);
-        SetShaderValue(shader, numVoicesLoc, &numVoices, SHADER_UNIFORM_INT);
-        SetShaderValue(shader, numPartialsLoc, &numPartials, SHADER_UNIFORM_INT);
-        SetShaderValueV(shader, voiceFreqsLoc, voiceFreqs, SHADER_UNIFORM_FLOAT, numVoices * numPartials);
-        SetShaderValueV(shader, voiceAmplitudesLoc, voiceAmplitudes, SHADER_UNIFORM_FLOAT, numVoices * numPartials);
-        SetShaderValue(shader, otherVoicesDissonanceLoc, &otherVoicesDissonance, SHADER_UNIFORM_FLOAT);
+        SetShaderValueTexture(shader, heightmapLoc, heightmapTexture.texture);
+        float surfaceDimensions[] = {4.0, 4.0};
+        SetShaderValue(shader, surfaceDimensionsLoc, &surfaceDimensions, SHADER_UNIFORM_VEC2);
         float viewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
         SetShaderValue(shader, viewIntsLoc, &viewInts, SHADER_UNIFORM_VEC4);
 
@@ -186,7 +206,9 @@ int main(void) {
     }
 
     UnloadRenderTexture(target);
+    UnloadRenderTexture(heightmapTexture);
     UnloadShader(shader);
+    UnloadShader(bakingShader);
     CloseWindow();
     return 0;
 }

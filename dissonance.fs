@@ -10,58 +10,28 @@ out vec4 finalColor;
 uniform mat4 invView;
 uniform mat4 invProj;
 uniform vec3 cameraPos;
-uniform int numVoices;
-uniform int numPartials;
-uniform float otherVoicesDissonance;
-uniform float voiceFreqs[32];
-uniform float voiceAmplitudes[32];
+uniform sampler2D heightmap;
+uniform vec2 surfaceDimensions;
 uniform vec4 viewInts;
+uniform float maxHeight;
 
 /* ============================================================================ */
-/*                  GLSL REPLICATION OF MATH (UPDATED)                          */
+/*                  Optimized Surface/Normal Functions                          */
 /* ============================================================================ */
-
-float pairwiseDissonance(float f1, float a1, float f2, float a2) {
-    if (a1 == 0.0 || a2 == 0.0) return 0.0;
-    float s1 = 3.5;
-    float s2 = 5.75;
-    float f_min = min(f1, f2);
-    float f_max = max(f1, f2);
-    float cbw = 25.0 + 75.0 * pow(1.0 + 1.4 * pow(f_min / 1000.0, 2.0), 0.69);
-    if (cbw == 0.0) return 0.0;
-    float f_diff_norm = (f_max - f_min) / cbw;
-    return min(a1, a2) * (exp(-s1 * f_diff_norm) - exp(-s2 * f_diff_norm));
-}
 
 float getDissonanceAt(float x, float z) {
-    float totalDissonance = 0.0;
-    float coeff1;
-    float coeff2;
-
-    for (int i = 0; i < 2; i++) {
-      if (i / numPartials == 0) {coeff1 = x;} 
-      else if (i / numPartials == 1) {coeff1 = z;}
-      else {coeff1 = 1.0;}
-      for (int j = i + 1; j < numVoices * numPartials;j++) {
-        if (j / numPartials == 0) {coeff2 = x;} 
-        else if (j / numPartials == 1) {coeff2 = z;}
-        else {coeff2 = 1.0;}
-        totalDissonance += pairwiseDissonance(
-            voiceFreqs[i] * coeff1, voiceAmplitudes[i],
-            voiceFreqs[j] * coeff2, voiceAmplitudes[j]
-      );
-      }
-    }
-    return totalDissonance + otherVoicesDissonance;
+    vec2 uv = vec2(x / surfaceDimensions.x, z / surfaceDimensions.y);
+    uv = clamp(uv, 0.0, 1.0);
+    return texture(heightmap, uv).r * maxHeight;
 }
 
 vec3 getNormal(float x, float z) {
     vec2 e = vec2(0.01, 0.0);
     float h = getDissonanceAt(x, z);
     vec3 n = vec3(
-        h - getDissonanceAt(x - e.x, z - e.y),
+        h - getDissonanceAt(x - e.x, z),
         e.x,
-        h - getDissonanceAt(x - e.y, z - e.x)
+        h - getDissonanceAt(x, z - e.y)
     );
     return normalize(n);
 }
