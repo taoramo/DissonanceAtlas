@@ -1,6 +1,6 @@
 #version 330
 
-in vec2 fragCoord;
+//in vec2 fragCoord;
 out vec4 finalColor;
 
 /* ============================================================================ */
@@ -15,6 +15,7 @@ uniform int numPartials;
 uniform float otherVoicesDissonance;
 uniform float voiceFreqs[32];
 uniform float voiceAmplitudes[32];
+uniform vec4 viewInts;
 
 /* ============================================================================ */
 /*                  GLSL REPLICATION OF MATH (UPDATED)                          */
@@ -70,7 +71,10 @@ vec3 getNormal(float x, float z) {
 /* ============================================================================ */
 void main() {
     /* --- Ray Generation --- */
-    vec2 ndc = fragCoord * 2.0 - 1.0;
+    vec2 fragCoord = gl_FragCoord.xy;
+    // Flip Y-coordinate
+    fragCoord.y = viewInts.w - fragCoord.y;
+    vec2 ndc = fragCoord / vec2(viewInts.z, viewInts.w) * 2.0 - 1.0;
     vec4 ray_eye = invProj * vec4(ndc.x, ndc.y, -1.0, 1.0);
     vec3 rayDir = normalize((invView * vec4(ray_eye.xyz, 0.0)).xyz);
     vec3 rayOrigin = cameraPos;
@@ -78,50 +82,60 @@ void main() {
     /* --- Raymarching Loop --- */
     float t = 0.0;
     vec3 p = rayOrigin;
-    float h_prev = p.y - getDissonanceAt(p.x, p.z);
     bool hit = false;
 
-    for (int i = 0; i < 128; i++) {
-        t += max(0.01, h_prev * 0.5);
-        p = rayOrigin + t * rayDir;
-        float h_curr = p.y - getDissonanceAt(p.x, p.z);
-        if (h_curr * h_prev < 0.0) {
-            hit = true;
-            break;
-        }
-        h_prev = h_curr;
-        if (t > 200.0) break;
+    //assume we are basically always looking down
+
+    if (rayDir.y < 0) {
+      float t_xz_plane = -rayOrigin.y / rayDir.y;
+      if (t_xz_plane > 0.0) {
+        t = 0.75 * t_xz_plane;
+      }
     }
+
+    p = rayOrigin + t * rayDir;
+
+    for (int i = 0; i < 8; i++) {
+      float h_curr = p.y - getDissonanceAt(p.x, p.z);
+      // if (i == 3 && h_curr > 0.0 && hit == false)
+      //   break;
+      if (h_curr < 0.0)
+      {
+        t = t + -0.5 * t;
+        hit = true;
+      }
+      else if (h_curr > 0.0) {
+        t = t + 0.5 * t;
+      }
+      p = rayOrigin + t * rayDir;
+    }
+
+
+    // for (int i = 0; i < 64; i++) {
+    //     t += max(0.01, h_prev * 0.8);
+    //     p = rayOrigin + t * rayDir;
+    //     if (p.x > 4.0 || p.x < 0 || p.z > 4.0 || p.z < 0)
+    //       break;
+    //     float h_curr = p.y - getDissonanceAt(p.x, p.z);
+    //     if (h_curr * h_prev < 0.0) {
+    //         hit = true;
+    //         break;
+    //     }
+    //     h_prev = h_curr;
+    // }
 
     /* --- Coloring and Lighting --- */
     if (hit) {
-    //      /* No normal or lighting calculations are needed. */
-    //
-    //     /* Color is determined directly by the surface height (dissonance). */
-    //     vec3 color1 = vec3(0.1, 0.2, 0.8); // Blue for low dissonance
-    //     vec3 color2 = vec3(1.0, 0.3, 0.2); // Red for high dissonance
-    //
-    //     /* The y-coordinate of the intersection point 'p' is the dissonance value. */
-    //     vec3 surfaceColor = mix(color1, color2, clamp(p.y / 10.0, 0.0, 1.0));
-    //
-    //     // /* Apply fog for depth perception. */
-    //     // float fog = 1.0 - clamp(t / 200.0, 0.0, 1.0);
-    //     // finalColor = vec4(mix(vec3(0.0), surfaceColor, fog), 1.0);
-    //
-    // } else {
-    //     /* Background color if no hit (Unchanged) */
-    //     finalColor = vec4(0.05, 0.05, 0.1, 1.0);
-    // }
-        // vec3 normal = getNormal(p.x, p.z);
-        // vec3 lightDir = normalize(vec3(0.5, 0.8, -0.5));
-        // float diffuse = max(0.0, dot(normal, lightDir));
+        vec3 normal = getNormal(p.x, p.z);
+        vec3 lightDir = normalize(vec3(0.5, 0.8, -0.5));
+        float diffuse = max(0.0, dot(normal, lightDir));
         vec3 color1 = vec3(0.1, 0.2, 0.8);
         vec3 color2 = vec3(1.0, 0.3, 0.2);
         vec3 surfaceColor = mix(color1, color2, clamp(p.y, 0.0, 1.0));
-        // vec3 finalRgb = surfaceColor * (diffuse * 0.8 + 0.2);
         float fog = 1.0 - clamp(t / 200.0, 0.0, 1.0);
-        // finalColor = vec4(mix(vec3(0.0), finalRgb, fog), 1.0);
-        finalColor = vec4(mix(vec3(0.0), surfaceColor, fog), 1.0);
+        vec3 finalRgb = surfaceColor * (diffuse * 0.8 + 0.2);
+        finalColor = vec4(mix(vec3(0.0), finalRgb, fog), 1.0);
+        // finalColor = vec4(mix(vec3(0.0), surfaceColor, fog), 1.0);
         // finalColor = vec4(finalRgb, 1.0);
     } else {
         finalColor = vec4(0.05, 0.05, 0.1, 1.0);

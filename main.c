@@ -23,7 +23,7 @@ int main(void) {
     const int screenHeight = 720;
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(screenWidth, screenHeight, "T3 Chat - Dissonance Raymarcher (Complex Tones)");
-    SetTargetFPS(30);
+    SetTargetFPS(60);
 
     /* --- Camera Setup --- */
     Camera camera = { 0 };
@@ -33,8 +33,11 @@ int main(void) {
     camera.projection = CAMERA_PERSPECTIVE;
     camera.position = (Vector3){ 4.0f, 3.0f, 4.0f };
 
+    Camera2D camera2d = { 0 };
+    camera2d.zoom = 1.0f;
+
     /* --- Shader and Uniforms --- */
-    Shader shader = LoadShader("dissonance.vs", "dissonance.fs");
+    Shader shader = LoadShader(0, "dissonance.fs");
     int invViewLoc = GetShaderLocation(shader, "invView");
     int invProjLoc = GetShaderLocation(shader, "invProj");
     int cameraPosLoc = GetShaderLocation(shader, "cameraPos");
@@ -43,6 +46,9 @@ int main(void) {
     int voiceFreqsLoc = GetShaderLocation(shader, "voiceFreqs");
     int voiceAmplitudesLoc = GetShaderLocation(shader, "voiceAmplitudes");
     int otherVoicesDissonanceLoc = GetShaderLocation(shader, "otherVoicesDissonance");
+    int viewIntsLoc = GetShaderLocation(shader, "viewInts");
+
+    RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
 
     /* --- Voice Data Setup --- */
     //numVoices is number of voices other than base, x, z
@@ -110,9 +116,7 @@ int main(void) {
             // Update camera position
             camera.position = Vector3Add(camera.target, toCamera);
         }      
-        // UpdateCamera(&camera, CAMERA_ORBITAL);
 
-        // Get camera matrices
         if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
             Ray ray = GetMouseRay(GetMousePosition(), camera);
             bool hit = false;
@@ -157,20 +161,31 @@ int main(void) {
         SetShaderValueV(shader, voiceFreqsLoc, voiceFreqs, SHADER_UNIFORM_FLOAT, numVoices * numPartials);
         SetShaderValueV(shader, voiceAmplitudesLoc, voiceAmplitudes, SHADER_UNIFORM_FLOAT, numVoices * numPartials);
         SetShaderValue(shader, otherVoicesDissonanceLoc, &otherVoicesDissonance, SHADER_UNIFORM_FLOAT);
+        float viewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
+        SetShaderValue(shader, viewIntsLoc, &viewInts, SHADER_UNIFORM_VEC4);
+
+        BeginTextureMode(target);
+        ClearBackground(BLACK);
+        BeginShaderMode(shader);
+        DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
+        EndShaderMode();
+        EndTextureMode();
 
         BeginDrawing();
         ClearBackground(BLACK);
-        BeginShaderMode(shader);
-        DrawRectangle(100, 100, screenWidth/2, screenHeight/2, WHITE);
-        EndShaderMode();
+        DrawTextureRec(target.texture, (Rectangle){ 0, 0, (float)target.texture.width, (float)-target.texture.height }, (Vector2){ 0, 0 }, WHITE);
+        
+        BeginMode2D(camera2d);
         // rlDisableDepthTest();
         DrawText("Dissonance Surface (Complex Tones)", 10, 10, 20, SKYBLUE);
         DrawText("RMB Click: Get Coords", 10, 40, 10, LIGHTGRAY);
         DrawFPS(screenWidth - 90, 10);
+        EndMode2D();
         // rlEnableDepthTest();
         EndDrawing();
     }
 
+    UnloadRenderTexture(target);
     UnloadShader(shader);
     CloseWindow();
     return 0;
