@@ -5,6 +5,7 @@
 #include <stdio.h>
 #define DISSONANCE_IMPLEMENTATION
 #include "dissonance.h"
+#include <OpenGL/gl.h>
 
 
 /* ============================================================================ */
@@ -13,6 +14,38 @@
 #define MAX_PARTIALS 6
 #define NUM_VOICES 3
 
+RenderTexture2D LoadRenderTextureFloat(int width, int height) {
+    RenderTexture2D target = {0};
+    target.id = rlLoadFramebuffer();
+
+    if (target.id > 0) {
+        rlEnableFramebuffer(target.id);
+
+        target.texture.id = rlLoadTexture(
+            NULL, width, height, PIXELFORMAT_UNCOMPRESSED_R32, 1
+        );
+        target.texture.width = width;
+        target.texture.height = height;
+        target.texture.format = PIXELFORMAT_UNCOMPRESSED_R32;
+        target.texture.mipmaps = 1;
+
+        rlFramebufferAttach(
+            target.id, target.texture.id, RL_ATTACHMENT_COLOR_CHANNEL0,
+            RL_ATTACHMENT_TEXTURE2D, 0
+        );
+
+        if (rlFramebufferComplete(target.id)) {
+            TRACELOG(
+                LOG_INFO,
+                "FBO: [ID %i] Float framebuffer created successfully", target.id
+            );
+        }
+        rlDisableFramebuffer();
+    } else {
+        TRACELOG(LOG_WARNING, "FBO: Framebuffer object could not be created");
+    }
+    return target;
+}
 
 /* ============================================================================ */
 /*                                  MAIN                                        */
@@ -55,6 +88,13 @@ int main(void) {
 
     RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
     RenderTexture2D heightmapTexture = LoadRenderTexture(screenWidth, screenHeight);
+
+    // Use the high-level raylib functions to set the texture parameters.
+    // We must use a filter that does not require mipmaps.
+    // BILINEAR is equivalent to GL_LINEAR.
+    SetTextureFilter(heightmapTexture.texture, RL_TEXTURE_FILTER_BILINEAR);
+    // Set wrapping to clamp, which prevents weird artifacts at the edges.
+    SetTextureWrap(heightmapTexture.texture, RL_TEXTURE_WRAP_CLAMP);
 
     /* --- Voice Data Setup --- */
     //numVoices is number of voices other than base, x, z
@@ -169,10 +209,13 @@ int main(void) {
         SetShaderValueV(bakingShader, baking_voiceAmplitudesLoc, voiceAmplitudes, SHADER_UNIFORM_FLOAT, numVoices * numPartials);
         SetShaderValue(bakingShader, baking_otherVoicesDissonanceLoc, &otherVoicesDissonance, SHADER_UNIFORM_FLOAT);
         float bakingViewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
+        SetShaderValue(bakingShader, baking_viewIntsLoc, &bakingViewInts, SHADER_UNIFORM_VEC4);
 
         DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
         EndShaderMode();
         EndTextureMode();
+        Image tmp = LoadImageFromTexture(heightmapTexture.texture);
+        UpdateTexture(heightmapTexture.texture, tmp.data);
 
         // --- Pass 2: Render scene ---
         SetShaderValueMatrix(shader, invViewLoc, invView);
@@ -194,14 +237,12 @@ int main(void) {
         BeginDrawing();
         ClearBackground(BLACK);
         DrawTextureRec(target.texture, (Rectangle){ 0, 0, (float)target.texture.width, (float)-target.texture.height }, (Vector2){ 0, 0 }, WHITE);
-        
+
         BeginMode2D(camera2d);
-        // rlDisableDepthTest();
         DrawText("Dissonance Surface (Complex Tones)", 10, 10, 20, SKYBLUE);
         DrawText("RMB Click: Get Coords", 10, 40, 10, LIGHTGRAY);
         DrawFPS(screenWidth - 90, 10);
         EndMode2D();
-        // rlEnableDepthTest();
         EndDrawing();
     }
 
