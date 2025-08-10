@@ -9,12 +9,15 @@ SHADERS = dissonance.fs
 all: $(NAME)
 
 # Compile GLSL to SPIR-V
-dissonance.spv: dissonance.fs
-	glslc -fshader-stage=fragment $(SHADERS) -o dissonance.spv
+dissonance.frag.spv: dissonance.fs
+	glslc -fshader-stage=fragment dissonance.fs -o dissonance.frag.spv
+
+dissonance.vert.spv: dissonance.vert
+	glslc -fshader-stage=vertex dissonance.vert -o dissonance.vert.spv
 
 # Main target
-$(NAME): $(SRC) dissonance.h vulkan_backend.h dissonance.spv libraylib.a
+$(NAME): $(SRC) dissonance.h vulkan_backend.h dissonance.frag.spv dissonance.vert.spv libraylib.a
 	clang $(SRC) -o $(NAME) $(CFLAGS) $(MACOS_FLAGS) $(LIBFLAGS) $(INCLUDES)
 
 clean:
-	rm -f $(NAME) dissonance.spv
+	rm -f $(NAME) dissonance.frag.spv dissonance.vert.spv
