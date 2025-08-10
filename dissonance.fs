@@ -17,6 +17,8 @@ uniform float voiceFreqs[32];
 uniform float voiceAmplitudes[32];
 uniform vec4 viewInts;
 
+const float scaling_factor = 1.0;
+
 /* ============================================================================ */
 /*                  GLSL REPLICATION OF MATH (UPDATED)                          */
 /* ============================================================================ */
@@ -52,7 +54,7 @@ float getDissonanceAt(float x, float z) {
       );
       }
     }
-    return totalDissonance + otherVoicesDissonance;
+    return (totalDissonance + otherVoicesDissonance) * scaling_factor;
 }
 
 vec3 getNormal(float x, float z) {
@@ -81,7 +83,7 @@ void main() {
 
     // Bounding sphere pre-check
     vec3 sphereCenter = vec3(2.0, 0.5, 2.0);
-    float sphereRadius = 3.0;
+    float sphereRadius = 3 * scaling_factor;
     vec3 oc = rayOrigin - sphereCenter;
     float b = dot(oc, rayDir);
     float c = dot(oc, oc) - sphereRadius*sphereRadius;
@@ -93,6 +95,8 @@ void main() {
         /* --- Raymarching Loop --- */
         float t = -b - sqrt(discriminant);
         t = max(0.0, t); // Start at the sphere entry point, but not behind the camera
+        // float t = rayOrigin.y * 0.75;
+        // float t = 0.0;
 
         vec3 p = rayOrigin + t * rayDir;
         float h_prev = p.y - getDissonanceAt(p.x, p.z);
@@ -101,20 +105,22 @@ void main() {
 
         for (int i = 0; i < 32; i++) {
             float step = max(0.01, abs(h_prev) * 0.85) * (1.0 + t * 0.015);
+            // float step = max(0.05, abs(h_prev) * 0.3);
             float t_curr = t + step;
             p = rayOrigin + t_curr * rayDir;
             float h_curr = p.y - getDissonanceAt(p.x, p.z);
-            if (p.x > 4.0 || p.x < 0.0 || p.z > 4.0 || p.z < 0.0)
+            if (p.x < 0.0 || p.z < 0.0)
               break;
 
             min_h = min(min_h, h_curr);
-            if (h_curr > min_h + 0.5) break; // Divergence check
+            if (h_curr > min_h + 5.0) break; // Divergence check
 
             if (h_curr * h_prev < 0.0) {
                 // Refinement phase: Adaptive binary search
                 float t_lower = t;
                 float t_upper = t_curr;
                 int refinement_steps = int(max(2.0, 5.0 - t * 0.1));
+                // int refinement_steps = 3;
                 for (int j = 0; j < refinement_steps; j++) {
                     float t_mid = (t_lower + t_upper) / 2.0;
                     vec3 p_mid = rayOrigin + t_mid * rayDir;
@@ -138,16 +144,16 @@ void main() {
 
         /* --- Coloring and Lighting --- */
         if (hit) {
-            // vec3 normal = getNormal(p.x, p.z);
-            // vec3 lightDir = normalize(vec3(0.5, 0.8, -0.5));
-            // float diffuse = max(0.0, dot(normal, lightDir));
+            vec3 normal = getNormal(p.x, p.z);
+            vec3 lightDir = normalize(vec3(5, 100, 5));
+            float diffuse = max(0.0, dot(normal, lightDir));
             vec3 color1 = vec3(0.1, 0.2, 0.8);
             vec3 color2 = vec3(1.0, 0.3, 0.2);
-            vec3 surfaceColor = mix(color1, color2, clamp(p.y, 0.0, 1.0));
+            vec3 surfaceColor = mix(color1, color2, clamp(p.y/scaling_factor * 1.5, 0.0, 1.0));
             float fog = 1.0 - clamp(t / 200.0, 0.0, 1.0);
-            // vec3 finalRgb = surfaceColor * (diffuse * 0.8 + 0.2);
-            // finalColor = vec4(mix(vec3(0.0), finalRgb, fog), 1.0);
-            finalColor = vec4(mix(vec3(0.0), surfaceColor, fog), 1.0);
+            vec3 finalRgb = surfaceColor * (diffuse * 0.8 + 0.2);
+            finalColor = vec4(mix(vec3(0.0), finalRgb, fog), 1.0);
+            // finalColor = vec4(mix(vec3(0.0), surfaceColor, fog), 1.0);
         } else {
             finalColor = vec4(0.05, 0.05, 0.1, 1.0);
        }

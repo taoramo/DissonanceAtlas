@@ -28,10 +28,10 @@ int main(void) {
     /* --- Camera Setup --- */
     Camera camera = { 0 };
     camera.target = (Vector3){ 1.5f, 1.0f, 1.5f };
-    camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
+    camera.up = (Vector3){ 0.0f, -1.0f, 0.0f };
     camera.fovy = 45.0f;
     camera.projection = CAMERA_PERSPECTIVE;
-    camera.position = (Vector3){ 4.0f, 3.0f, 4.0f };
+    camera.position = (Vector3){ 4.0f, 5.0f, 1.0f };
 
     Camera2D camera2d = { 0 };
     camera2d.zoom = 1.0f;
@@ -87,35 +87,20 @@ int main(void) {
    // --- Main Game Loop ---
     while (!WindowShouldClose()) {
         // --- Update ---
-        float wheel = GetMouseWheelMove();
-        if (wheel != 0) {
-            // Get the vector from the target to the camera
-            Vector3 toCamera = Vector3Subtract(camera.position, camera.target);
-            float distance = Vector3Length(toCamera);
-            // Scale distance by zoom factor, but prevent going inside the target
-            distance = fmaxf(distance - wheel * 0.8f, 0.1f);
-            // Recalculate position
-            camera.position = Vector3Add(camera.target, Vector3Scale(Vector3Normalize(toCamera), distance));
-        }
-
-        // Orbit with left mouse button
-        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            Vector2 mouseDelta = GetMouseDelta();
-            float rotateSpeed = 0.005f; // Adjust sensitivity
-
-            // Get the vector from the target to the camera
-            Vector3 toCamera = Vector3Subtract(camera.position, camera.target);
-
-            // Horizontal rotation (around the world's Y axis)
-            toCamera = Vector3RotateByAxisAngle(toCamera, camera.up, -mouseDelta.x * rotateSpeed);
-
-            // Vertical rotation (around the camera's "right" axis)
-            Vector3 right = Vector3CrossProduct(Vector3Normalize(toCamera), camera.up);
-            toCamera = Vector3RotateByAxisAngle(toCamera, right, -mouseDelta.y * rotateSpeed);
-
-            // Update camera position
-            camera.position = Vector3Add(camera.target, toCamera);
-        }      
+        // UpdateCamera(&camera, CAMERA_FIRST_PERSON);
+        UpdateCameraPro(
+            &camera,
+            (Vector3){
+                IsKeyDown(KEY_W) * 0.1f - IsKeyDown(KEY_S) * 0.1f,
+                IsKeyDown(KEY_D) * 0.1f - IsKeyDown(KEY_A) * 0.1f,
+                IsKeyDown(KEY_R) * 0.1f - IsKeyDown(KEY_F) * 0.1f
+            },
+            (Vector3){
+                IsKeyDown(KEY_RIGHT) * 0.1f - IsKeyDown(KEY_LEFT) * 0.1f, // Rotation: pitch
+                IsKeyDown(KEY_UP) * 0.1f - IsKeyDown(KEY_DOWN) * 0.1f, // Rotation: yaw
+                0.0f                       // Rotation: roll
+            },
+            GetMouseWheelMove() * 2.0f); // Move to target (zoom)
 
         if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
             Ray ray = GetMouseRay(GetMousePosition(), camera);
