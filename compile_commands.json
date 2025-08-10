@@ -1,0 +1,54 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/clang",
+      "-c",
+      "-Wextra",
+      "-Wall",
+      "-std=c99",
+      "-framework",
+      "OpenGL",
+      "-framework",
+      "Cocoa",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "CoreAudio",
+      "-framework",
+      "CoreVideo",
+      "-I~/VulkanSDK/1.4.321.0/macOS/include/",
+      "-o",
+      "hello",
+      "main.c"
+    ],
+    "directory": "/Users/taavioramo/atlas/raylib_helloworld",
+    "file": "/Users/taavioramo/atlas/raylib_helloworld/main.c",
+    "output": "/Users/taavioramo/atlas/raylib_helloworld/hello"
+  },
+  {
+    "arguments": [
+      "/usr/bin/clang",
+      "-c",
+      "-Wextra",
+      "-Wall",
+      "-std=c99",
+      "-framework",
+      "OpenGL",
+      "-framework",
+      "Cocoa",
+      "-framework",
+      "IOKit",
+      "-framework",
+      "CoreAudio",
+      "-framework",
+      "CoreVideo",
+      "-I~/VulkanSDK/1.4.321.0/macOS/include/",
+      "-o",
+      "hello",
+      "vulkan_backend.c"
+    ],
+    "directory": "/Users/taavioramo/atlas/raylib_helloworld",
+    "file": "/Users/taavioramo/atlas/raylib_helloworld/vulkan_backend.c",
+    "output": "/Users/taavioramo/atlas/raylib_helloworld/hello"
+  }
+]

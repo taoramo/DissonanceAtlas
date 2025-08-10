@@ -1,21 +1,22 @@
-#version 330
+#version 450
 
-//in vec2 fragCoord;
-out vec4 finalColor;
+layout(location = 0) out vec4 finalColor;
 
 /* ============================================================================ */
 /*                            CORE DEFINITIONS                                  */
 /* ============================================================================ */
 
-uniform mat4 invView;
-uniform mat4 invProj;
-uniform vec3 cameraPos;
-uniform int numVoices;
-uniform int numPartials;
-uniform float otherVoicesDissonance;
-uniform float voiceFreqs[32];
-uniform float voiceAmplitudes[32];
-uniform vec4 viewInts;
+layout(binding = 0) uniform Uniforms {
+    mat4 invView;
+    mat4 invProj;
+    vec3 cameraPos;
+    int numVoices;
+    int numPartials;
+    float otherVoicesDissonance;
+    float voiceFreqs[32];
+    float voiceAmplitudes[32];
+    vec4 viewInts;
+};
 
 const float scaling_factor = 1.0;
 
