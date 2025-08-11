@@ -1,4 +1,4 @@
-#version 330
+#version 410
 
 // This is the output that will be sent to the fragment shader.
 // The GPU will automatically interpolate this value for each pixel.

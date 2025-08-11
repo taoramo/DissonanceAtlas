@@ -54,7 +54,7 @@ int main(void) {
     /* --- Initialization --- */
     const int screenWidth = 1280;
     const int screenHeight = 720;
-    SetConfigFlags(FLAG_MSAA_4X_HINT);
+    // SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(screenWidth, screenHeight, "T3 Chat - Dissonance Raymarcher (Complex Tones)");
     SetTargetFPS(60);
 
@@ -77,6 +77,7 @@ int main(void) {
     int viewIntsLoc = GetShaderLocation(shader, "viewInts");
     int heightmapLoc = GetShaderLocation(shader, "heightmap");
     int surfaceDimensionsLoc = GetShaderLocation(shader, "surfaceDimensions");
+    int maxHeightLoc = GetShaderLocation(shader, "maxHeight");
 
     Shader bakingShader = LoadShader(0, "baking.fs");
     int baking_numVoicesLoc = GetShaderLocation(bakingShader, "numVoices");
@@ -85,9 +86,10 @@ int main(void) {
     int baking_voiceAmplitudesLoc = GetShaderLocation(bakingShader, "voiceAmplitudes");
     int baking_otherVoicesDissonanceLoc = GetShaderLocation(bakingShader, "otherVoicesDissonance");
     int baking_viewIntsLoc = GetShaderLocation(bakingShader, "viewInts");
+    int baking_maxHeightLoc = GetShaderLocation(bakingShader, "maxHeight");
 
     RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
-    RenderTexture2D heightmapTexture = LoadRenderTexture(screenWidth, screenHeight);
+    RenderTexture2D heightmapTexture = LoadRenderTextureFloat(screenWidth, screenHeight);
 
     // Use the high-level raylib functions to set the texture parameters.
     // We must use a filter that does not require mipmaps.
@@ -210,14 +212,18 @@ int main(void) {
         SetShaderValue(bakingShader, baking_otherVoicesDissonanceLoc, &otherVoicesDissonance, SHADER_UNIFORM_FLOAT);
         float bakingViewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
         SetShaderValue(bakingShader, baking_viewIntsLoc, &bakingViewInts, SHADER_UNIFORM_VEC4);
+        float maxHeight = 1.0f; // Estimate for max dissonance
+        SetShaderValue(bakingShader, baking_maxHeightLoc, &maxHeight, SHADER_UNIFORM_FLOAT);
 
         DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
         EndShaderMode();
         EndTextureMode();
-        Image tmp = LoadImageFromTexture(heightmapTexture.texture);
-        UpdateTexture(heightmapTexture.texture, tmp.data);
 
         // --- Pass 2: Render scene ---
+        BeginTextureMode(target);
+        ClearBackground(BLACK);
+        BeginShaderMode(shader);
+
         SetShaderValueMatrix(shader, invViewLoc, invView);
         SetShaderValueMatrix(shader, invProjLoc, invProj);
         SetShaderValue(shader, cameraPosLoc, &camera.position, SHADER_UNIFORM_VEC3);
@@ -226,10 +232,8 @@ int main(void) {
         SetShaderValue(shader, surfaceDimensionsLoc, &surfaceDimensions, SHADER_UNIFORM_VEC2);
         float viewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
         SetShaderValue(shader, viewIntsLoc, &viewInts, SHADER_UNIFORM_VEC4);
+        SetShaderValue(shader, maxHeightLoc, &maxHeight, SHADER_UNIFORM_FLOAT);
 
-        BeginTextureMode(target);
-        ClearBackground(BLACK);
-        BeginShaderMode(shader);
         DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
         EndShaderMode();
         EndTextureMode();
@@ -237,6 +241,7 @@ int main(void) {
         BeginDrawing();
         ClearBackground(BLACK);
         DrawTextureRec(target.texture, (Rectangle){ 0, 0, (float)target.texture.width, (float)-target.texture.height }, (Vector2){ 0, 0 }, WHITE);
+        // DrawTextureRec(heightmapTexture.texture,(Rectangle){ 0, 0, (float)heightmapTexture.texture.width, (float)-heightmapTexture.texture.height }, (Vector2){ 0, 0}, WHITE);
 
         BeginMode2D(camera2d);
         DrawText("Dissonance Surface (Complex Tones)", 10, 10, 20, SKYBLUE);
