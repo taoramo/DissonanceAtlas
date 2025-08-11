@@ -11,8 +11,11 @@
 /* ============================================================================ */
 /*                            CORE DEFINITIONS                                  */
 /* ============================================================================ */
-#define MAX_PARTIALS 6
+#define MAX_PARTIALS 12
 #define NUM_VOICES 3
+
+// ADDED: Enum for rendering mode
+typedef enum { RENDER_MODE_RAYMARCH, RENDER_MODE_MESH } RenderMode;
 
 RenderTexture2D LoadRenderTextureFloat(int width, int height) {
     RenderTexture2D target = {0};
@@ -50,21 +53,31 @@ RenderTexture2D LoadRenderTextureFloat(int width, int height) {
 /* ============================================================================ */
 /*                                  MAIN                                        */
 /* ============================================================================ */
+/* ============================================================================ */
+/*                                  MAIN                                        */
+/* ============================================================================ */
 int main(void) {
     /* --- Initialization --- */
     const int screenWidth = 1280;
     const int screenHeight = 720;
-    // SetConfigFlags(FLAG_MSAA_4X_HINT);
-    InitWindow(screenWidth, screenHeight, "T3 Chat - Dissonance Raymarcher (Complex Tones)");
+    InitWindow(screenWidth, screenHeight, "Dissonance Visualizer");
     SetTargetFPS(60);
 
     /* --- Camera Setup --- */
     Camera camera = { 0 };
     camera.target = (Vector3){ 1.5f, 1.0f, 1.5f };
-    camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
+    camera.up = (Vector3){ 0.0f, -1.0f, 0.0f };
     camera.fovy = 45.0f;
     camera.projection = CAMERA_PERSPECTIVE;
     camera.position = (Vector3){ 4.0f, 3.0f, 4.0f };
+
+    // ADDED: New camera for mesh rendering
+    Camera cameraMesh = { 0 };
+    cameraMesh.target = (Vector3){ 0.0f, 0.0f, 0.0f };
+    cameraMesh.up = (Vector3){ 0.0f, 1.0f, 0.0f };
+    cameraMesh.fovy = 45.0f;
+    cameraMesh.projection = CAMERA_PERSPECTIVE;
+    cameraMesh.position = (Vector3){ 5.0f, 5.0f, 5.0f };
 
     Camera2D camera2d = { 0 };
     camera2d.zoom = 1.0f;
@@ -88,34 +101,31 @@ int main(void) {
     int baking_viewIntsLoc = GetShaderLocation(bakingShader, "viewInts");
     int baking_maxHeightLoc = GetShaderLocation(bakingShader, "maxHeight");
 
+    Shader terrainShader = LoadShader("terrain.vs", "terrain.fs");
+    int terrain_heightMultiplierLoc = GetShaderLocation(terrainShader, "heightMultiplier");
+    int terrain_objectColorLoc = GetShaderLocation(terrainShader, "objectColor");
+    int terrain_heightMapLoc = GetShaderLocation(terrainShader, "heightMap");
+
     RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
     RenderTexture2D heightmapTexture = LoadRenderTextureFloat(screenWidth, screenHeight);
+    SetTextureFilter(heightmapTexture.texture, TEXTURE_FILTER_BILINEAR);
+    SetTextureWrap(heightmapTexture.texture, TEXTURE_WRAP_CLAMP);
 
-    // Use the high-level raylib functions to set the texture parameters.
-    // We must use a filter that does not require mipmaps.
-    // BILINEAR is equivalent to GL_LINEAR.
-    SetTextureFilter(heightmapTexture.texture, RL_TEXTURE_FILTER_BILINEAR);
-    // Set wrapping to clamp, which prevents weird artifacts at the edges.
-    SetTextureWrap(heightmapTexture.texture, RL_TEXTURE_WRAP_CLAMP);
+    Mesh terrainMesh = GenMeshPlane(4.0f, 4.0f, 256, 256);
+    Material terrainMaterial = LoadMaterialDefault();
+    terrainMaterial.shader = terrainShader;
 
     /* --- Voice Data Setup --- */
-    //numVoices is number of voices other than base, x, z
     int numVoices = NUM_VOICES;
     int numPartials = MAX_PARTIALS;
     Voice voices[NUM_VOICES] = { 0 };
     float base_freq = 220.0f;
-
-    /* Voice 0: Dynamic X-axis */
     GenerateHarmonicSeries(&voices[0], base_freq, 1.0f, 8, MAX_PARTIALS);
-    /* Voice 2: Dynamic Z-axis. */
     GenerateHarmonicSeries(&voices[1], base_freq, 1.0f, 8, MAX_PARTIALS);
-    /* Voice 2: base_freq */
     GenerateHarmonicSeries(&voices[2], base_freq, 1.0f, 8, MAX_PARTIALS);
 
-    /* Flatten voice data for the shader */
     float voiceFreqs[NUM_VOICES * MAX_PARTIALS];
     float voiceAmplitudes[NUM_VOICES * MAX_PARTIALS];
-
     int totalPartials = 0;
     for (int i = 0; i < numVoices; i++) {
       for (int j = 0; j < numPartials; j++) {
@@ -132,79 +142,67 @@ int main(void) {
         }
     }
 
+    RenderMode currentMode = RENDER_MODE_RAYMARCH;
+    float maxHeight = 1.0f;
+
    // --- Main Game Loop ---
     while (!WindowShouldClose()) {
         // --- Update ---
-        float wheel = GetMouseWheelMove();
-        if (wheel != 0) {
-            // Get the vector from the target to the camera
-            Vector3 toCamera = Vector3Subtract(camera.position, camera.target);
-            float distance = Vector3Length(toCamera);
-            // Scale distance by zoom factor, but prevent going inside the target
-            distance = fmaxf(distance - wheel * 0.8f, 0.1f);
-            // Recalculate position
-            camera.position = Vector3Add(camera.target, Vector3Scale(Vector3Normalize(toCamera), distance));
+        if (IsKeyPressed(KEY_M)) {
+            currentMode = (currentMode == RENDER_MODE_RAYMARCH) ? RENDER_MODE_MESH : RENDER_MODE_RAYMARCH;
         }
 
-        // Orbit with left mouse button
-        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            Vector2 mouseDelta = GetMouseDelta();
-            float rotateSpeed = 0.005f; // Adjust sensitivity
+        if (currentMode == RENDER_MODE_RAYMARCH) {
+            UpdateCameraPro(
+                &camera,
+                (Vector3){
+                    IsKeyDown(KEY_W) * 0.1f - IsKeyDown(KEY_S) * 0.1f,
+                    IsKeyDown(KEY_D) * 0.1f - IsKeyDown(KEY_A) * 0.1f,
+                    IsKeyDown(KEY_R) * 0.1f - IsKeyDown(KEY_F) * 0.1f
+                },
+                (Vector3){
+                    IsKeyDown(KEY_RIGHT) * 0.1f - IsKeyDown(KEY_LEFT) * 0.1f,
+                    IsKeyDown(KEY_UP) * 0.1f - IsKeyDown(KEY_DOWN) * 0.1f,
+                    0.0f
+                },
+                GetMouseWheelMove() * 2.0f);
 
-            // Get the vector from the target to the camera
-            Vector3 toCamera = Vector3Subtract(camera.position, camera.target);
+            if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+                Ray ray = GetMouseRay(GetMousePosition(), camera);
+                bool hit = false;
+                Vector3 intersectionPoint = { 0 };
+                float t = 0.0f;
+                Vector3 p = ray.position;
+                float h_prev = p.y - getxzDissonance(p.x, p.z, voiceFreqs, voiceAmplitudes, numVoices, numPartials) + otherVoicesDissonance;
 
-            // Horizontal rotation (around the world's Y axis)
-            toCamera = Vector3RotateByAxisAngle(toCamera, camera.up, -mouseDelta.x * rotateSpeed);
-
-            // Vertical rotation (around the camera's "right" axis)
-            Vector3 right = Vector3CrossProduct(Vector3Normalize(toCamera), camera.up);
-            toCamera = Vector3RotateByAxisAngle(toCamera, right, -mouseDelta.y * rotateSpeed);
-
-            // Update camera position
-            camera.position = Vector3Add(camera.target, toCamera);
-        }      
-
-        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-            Ray ray = GetMouseRay(GetMousePosition(), camera);
-            bool hit = false;
-            Vector3 intersectionPoint = { 0 };
-            float t = 0.0f;
-            Vector3 p = ray.position;
-            float h_prev = p.y - getxzDissonance(p.x, p.z, voiceFreqs, voiceAmplitudes, numVoices, numPartials) + otherVoicesDissonance;
-
-            for (int i = 0; i < 256; i++) {
-                t += fmaxf(0.01f, h_prev * 0.5f);
-                p = Vector3Add(ray.position, Vector3Scale(ray.direction, t));
-                float h_curr = p.y - getxzDissonance(p.x, p.z, voiceFreqs, voiceAmplitudes, numVoices, numPartials) + otherVoicesDissonance;
-                if (h_curr * h_prev < 0.0) {
-                    intersectionPoint = p;
-                    hit = true;
-                    break;
+                for (int i = 0; i < 256; i++) {
+                    t += fmaxf(0.01f, h_prev * 0.5f);
+                    p = Vector3Add(ray.position, Vector3Scale(ray.direction, t));
+                    float h_curr = p.y - getxzDissonance(p.x, p.z, voiceFreqs, voiceAmplitudes, numVoices, numPartials) + otherVoicesDissonance;
+                    if (h_curr * h_prev < 0.0) {
+                        intersectionPoint = p;
+                        hit = true;
+                        break;
+                    }
+                    h_prev = h_curr;
+                    if (t > 200.0f) break;
                 }
-                h_prev = h_curr;
-                if (t > 200.0f) break;
-            }
 
-            if (hit) {
-                printf("Intersection Found!\n");
-                printf("  Coefficients:  coeff_x=%.3f, coeff_z=%.3f\n", intersectionPoint.x, intersectionPoint.z);
-                printf("  Frequencies:   f_x=%.2f Hz, f_z=%.2f Hz\n", voices[1].partials[0].freq * intersectionPoint.x, voices[2].partials[0].freq * intersectionPoint.z);
-                printf("  Dissonance:    y=%.3f\n\n", intersectionPoint.y);
+                if (hit) {
+                    printf("Intersection Found!\n");
+                    printf("  Coefficients:  coeff_x=%.3f, coeff_z=%.3f\n", intersectionPoint.x, intersectionPoint.z);
+                    printf("  Frequencies:   f_x=%.2f Hz, f_z=%.2f Hz\n", voices[1].partials[0].freq * intersectionPoint.x, voices[2].partials[0].freq * intersectionPoint.z);
+                    printf("  Dissonance:    y=%.3f\n\n", intersectionPoint.y);
+                }
             }
+        } else { // RENDER_MODE_MESH
+            UpdateCamera(&cameraMesh, CAMERA_FREE);
         }
 
-        /* --- Send data to shader and draw --- */
-        Matrix view = GetCameraMatrix(camera);
-        Matrix proj = MatrixPerspective(camera.fovy * DEG2RAD, (double)screenWidth / screenHeight, 0.1, 1000.0);
-        Matrix invView = MatrixInvert(view);
-        Matrix invProj = MatrixInvert(proj);
-
-        // --- Pass 1: Bake heightmap ---
+        /* --- Pass 1: Bake heightmap (common for both modes) --- */
         BeginTextureMode(heightmapTexture);
         ClearBackground(BLANK);
         BeginShaderMode(bakingShader);
-        // Set baking shader uniforms
         SetShaderValue(bakingShader, baking_numVoicesLoc, &numVoices, SHADER_UNIFORM_INT);
         SetShaderValue(bakingShader, baking_numPartialsLoc, &numPartials, SHADER_UNIFORM_INT);
         SetShaderValueV(bakingShader, baking_voiceFreqsLoc, voiceFreqs, SHADER_UNIFORM_FLOAT, numVoices * numPartials);
@@ -212,40 +210,54 @@ int main(void) {
         SetShaderValue(bakingShader, baking_otherVoicesDissonanceLoc, &otherVoicesDissonance, SHADER_UNIFORM_FLOAT);
         float bakingViewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
         SetShaderValue(bakingShader, baking_viewIntsLoc, &bakingViewInts, SHADER_UNIFORM_VEC4);
-        float maxHeight = 1.0f; // Estimate for max dissonance
         SetShaderValue(bakingShader, baking_maxHeightLoc, &maxHeight, SHADER_UNIFORM_FLOAT);
-
         DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
         EndShaderMode();
         EndTextureMode();
 
-        // --- Pass 2: Render scene ---
-        BeginTextureMode(target);
-        ClearBackground(BLACK);
-        BeginShaderMode(shader);
-
-        SetShaderValueMatrix(shader, invViewLoc, invView);
-        SetShaderValueMatrix(shader, invProjLoc, invProj);
-        SetShaderValue(shader, cameraPosLoc, &camera.position, SHADER_UNIFORM_VEC3);
-        SetShaderValueTexture(shader, heightmapLoc, heightmapTexture.texture);
-        float surfaceDimensions[] = {4.0, 4.0};
-        SetShaderValue(shader, surfaceDimensionsLoc, &surfaceDimensions, SHADER_UNIFORM_VEC2);
-        float viewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
-        SetShaderValue(shader, viewIntsLoc, &viewInts, SHADER_UNIFORM_VEC4);
-        SetShaderValue(shader, maxHeightLoc, &maxHeight, SHADER_UNIFORM_FLOAT);
-
-        DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
-        EndShaderMode();
-        EndTextureMode();
+        if (currentMode == RENDER_MODE_RAYMARCH) {
+            BeginTextureMode(target);
+            ClearBackground(BLACK);
+            BeginShaderMode(shader);
+            Matrix view = GetCameraMatrix(camera);
+            Matrix proj = MatrixPerspective(camera.fovy * DEG2RAD, (double)screenWidth / screenHeight, 0.1, 1000.0);
+            Matrix invView = MatrixInvert(view);
+            Matrix invProj = MatrixInvert(proj);
+            SetShaderValueMatrix(shader, invViewLoc, invView);
+            SetShaderValueMatrix(shader, invProjLoc, invProj);
+            SetShaderValue(shader, cameraPosLoc, &camera.position, SHADER_UNIFORM_VEC3);
+            SetShaderValueTexture(shader, heightmapLoc, heightmapTexture.texture);
+            float surfaceDimensions[] = {4.0, 4.0};
+            SetShaderValue(shader, surfaceDimensionsLoc, &surfaceDimensions, SHADER_UNIFORM_VEC2);
+            float viewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
+            SetShaderValue(shader, viewIntsLoc, &viewInts, SHADER_UNIFORM_VEC4);
+            SetShaderValue(shader, maxHeightLoc, &maxHeight, SHADER_UNIFORM_FLOAT);
+            DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
+            EndShaderMode();
+            EndTextureMode();
+        }
 
         BeginDrawing();
         ClearBackground(BLACK);
-        DrawTextureRec(target.texture, (Rectangle){ 0, 0, (float)target.texture.width, (float)-target.texture.height }, (Vector2){ 0, 0 }, WHITE);
-        // DrawTextureRec(heightmapTexture.texture,(Rectangle){ 0, 0, (float)heightmapTexture.texture.width, (float)-heightmapTexture.texture.height }, (Vector2){ 0, 0}, WHITE);
+
+        if (currentMode == RENDER_MODE_RAYMARCH) {
+            DrawTextureRec(target.texture, (Rectangle){ 0, 0, (float)target.texture.width, (float)-target.texture.height }, (Vector2){ 0, 0 }, WHITE);
+        } else { // RENDER_MODE_MESH
+            BeginMode3D(cameraMesh);
+            SetMaterialTexture(&terrainMaterial, MATERIAL_MAP_ALBEDO, heightmapTexture.texture);
+            float heightMultiplier = 0.5f;
+            SetShaderValueTexture(terrainShader, terrain_heightMapLoc, heightmapTexture.texture);
+            SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
+            Vector3 objectColor = { 0.8f, 0.0f, 0.0f };
+            SetShaderValue(terrainShader, terrain_objectColorLoc, &objectColor, SHADER_UNIFORM_VEC3);
+            DrawMesh(terrainMesh, terrainMaterial, MatrixIdentity());
+            DrawGrid(40, 0.1);
+            EndMode3D();
+        }
 
         BeginMode2D(camera2d);
-        DrawText("Dissonance Surface (Complex Tones)", 10, 10, 20, SKYBLUE);
-        DrawText("RMB Click: Get Coords", 10, 40, 10, LIGHTGRAY);
+        DrawText("Press 'M' to switch render mode", 10, 10, 20, SKYBLUE);
+        DrawText(TextFormat("Current Mode: %s", (currentMode == RENDER_MODE_RAYMARCH) ? "Raymarching" : "Mesh"), 10, 40, 10, LIGHTGRAY);
         DrawFPS(screenWidth - 90, 10);
         EndMode2D();
         EndDrawing();
@@ -255,6 +267,7 @@ int main(void) {
     UnloadRenderTexture(heightmapTexture);
     UnloadShader(shader);
     UnloadShader(bakingShader);
+    UnloadShader(terrainShader);
+    UnloadMesh(terrainMesh);
     CloseWindow();
-    return 0;
 }

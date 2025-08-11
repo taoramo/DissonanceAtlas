@@ -51,7 +51,7 @@ void main() {
 
     // Bounding sphere pre-check
     vec3 sphereCenter = vec3(2.0, 0.5, 2.0);
-    float sphereRadius = 3.0;
+    float sphereRadius = 3.0 * maxHeight;
     vec3 oc = rayOrigin - sphereCenter;
     float b = dot(oc, rayDir);
     float c = dot(oc, oc) - sphereRadius*sphereRadius;
@@ -69,8 +69,8 @@ void main() {
         bool hit = false;
         float min_h = h_prev;
 
-        for (int i = 0; i < 32; i++) {
-            float step = max(0.01, abs(h_prev) * 0.85) * (1.0 + t * 0.015);
+        for (int i = 0; i < 64; i++) {
+            float step = max(0.005, abs(h_prev) * 0.5) * (0.5 + t * 0.015);
             float t_curr = t + step;
             p = rayOrigin + t_curr * rayDir;
             float h_curr = p.y - getDissonanceAt(p.x, p.z);
@@ -84,7 +84,7 @@ void main() {
                 // Refinement phase: Adaptive binary search
                 float t_lower = t;
                 float t_upper = t_curr;
-                int refinement_steps = int(max(2.0, 5.0 - t * 0.1));
+                int refinement_steps = int(max(2.0, 10.0 - t * 0.1));
                 for (int j = 0; j < refinement_steps; j++) {
                     float t_mid = (t_lower + t_upper) / 2.0;
                     vec3 p_mid = rayOrigin + t_mid * rayDir;
@@ -108,16 +108,16 @@ void main() {
 
         /* --- Coloring and Lighting --- */
         if (hit) {
-            // vec3 normal = getNormal(p.x, p.z);
-            // vec3 lightDir = normalize(vec3(0.5, 0.8, -0.5));
-            // float diffuse = max(0.0, dot(normal, lightDir));
+            vec3 normal = getNormal(p.x, p.z);
+            vec3 lightDir = normalize(vec3(0.5, 0.8, -0.5));
+            float diffuse = max(0.0, dot(normal, lightDir));
             vec3 color1 = vec3(0.1, 0.2, 0.8);
             vec3 color2 = vec3(1.0, 0.3, 0.2);
             vec3 surfaceColor = mix(color1, color2, clamp(p.y, 0.0, 1.0));
             float fog = 1.0 - clamp(t / 200.0, 0.0, 1.0);
-            // vec3 finalRgb = surfaceColor * (diffuse * 0.8 + 0.2);
-            // finalColor = vec4(mix(vec3(0.0), finalRgb, fog), 1.0);
-            finalColor = vec4(mix(vec3(0.0), surfaceColor, fog), 1.0);
+            vec3 finalRgb = surfaceColor * (diffuse * 0.8 + 0.2);
+            finalColor = vec4(mix(vec3(0.0), finalRgb, fog), 1.0);
+            // finalColor = vec4(mix(vec3(0.0), surfaceColor, fog), 1.0);
         } else {
             finalColor = vec4(0.05, 0.05, 0.1, 1.0);
        }
