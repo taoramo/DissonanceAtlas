@@ -19,6 +19,7 @@ void main()
 
     // Displace the vertex's Y position
     vec3 displacedPos = aPos + vec3(0.0, height * heightMultiplier, 0.0);
+    FragPos = displacedPos;
 
     gl_Position = mvp * vec4(displacedPos, 1.0);
 }

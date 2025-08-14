@@ -47,6 +47,10 @@ int main(void) {
   camera2d.zoom = 1.0f;
 
   Shader bakingShader = LoadShader(0, "baking.fs");
+  if (!IsShaderValid(bakingShader)) {
+    TraceLog(LOG_ERROR, "Failed to load baking shader");
+    return 1;
+  }
   int baking_numVoicesLoc = GetShaderLocation(bakingShader, "numVoices");
   int baking_numPartialsLoc = GetShaderLocation(bakingShader, "numPartials");
   int baking_voiceFreqsLoc = GetShaderLocation(bakingShader, "voiceFreqs");
@@ -56,9 +60,14 @@ int main(void) {
   int baking_maxHeightLoc = GetShaderLocation(bakingShader, "maxHeight");
 
   Shader terrainShader = LoadShader("terrain.vs", "terrain.fs");
+  if (!IsShaderValid(terrainShader)) {
+    TraceLog(LOG_ERROR, "Failed to load terrain shader");
+    return 1;
+  }
   int terrain_heightMultiplierLoc = GetShaderLocation(terrainShader, "heightMultiplier");
   int terrain_objectColorLoc = GetShaderLocation(terrainShader, "objectColor");
   int terrain_heightMapLoc = GetShaderLocation(terrainShader, "heightMap");
+  // int terrain_maxHeightLoc = GetShaderLocation(terrainShader, "maxHeight");
 
   RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
   RenderTexture2D heightmapTexture = LoadRenderTextureFloat(screenWidth, screenHeight);
@@ -99,17 +108,18 @@ int main(void) {
       EndShaderMode();
     EndTextureMode();
 
-    BeginDrawing();
+    BeginDrawing(); 
     ClearBackground(BLACK);
 
       BeginMode3D(cameraMesh);
-        SetMaterialTexture(&terrainMaterial, MATERIAL_MAP_ALBEDO, heightmapTexture.texture);
-        float heightMultiplier = 0.5f;
-        SetShaderValueTexture(terrainShader, terrain_heightMapLoc, heightmapTexture.texture);
-        SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
-        Vector3 objectColor = {0.8f, 0.0f, 0.0f};
-        SetShaderValue(terrainShader, terrain_objectColorLoc, &objectColor, SHADER_UNIFORM_VEC3);
-        DrawMesh(terrainMesh, terrainMaterial, MatrixIdentity());
+        BeginShaderMode(terrainShader);
+          float heightMultiplier = 0.5f;
+          SetShaderValueTexture(terrainShader, terrain_heightMapLoc, heightmapTexture.texture);
+          SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
+          Vector3 objectColor = { 0.8f, 0.0f, 0.0f };
+          SetShaderValue(terrainShader, terrain_objectColorLoc, &objectColor, SHADER_UNIFORM_VEC3);
+          DrawMesh(terrainMesh, terrainMaterial, MatrixIdentity());
+        EndShaderMode();
         DrawGrid(40, 0.1);
       EndMode3D();
 

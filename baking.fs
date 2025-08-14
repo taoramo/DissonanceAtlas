@@ -15,15 +15,18 @@ uniform float maxHeight;
 const float SURFACE_WIDTH = 4.0;
 const float SURFACE_HEIGHT = 4.0;
 
+#define PLOMP_A 3.5
+#define PLOMP_B 5.75
+
 /* ============================================================================ */
 /*                  Dissonance Calculation Functions                            */
 /* ============================================================================ */
 
 float pairwiseDissonance(float f1, float a1, float f2, float a2) {
     if (a1 == 0.0 || a2 == 0.0) return 0.0;
-    float freq_diff = fabsf(f1 - f2);
+    float freq_diff = abs(f1 - f2);
     float amp_prod = a1 * a2;
-    return (amp_prod * (expf(-PLOMP_A * freq_diff) - expf(-PLOMP_B * freq_diff)));
+    return (amp_prod * (exp(-PLOMP_A * freq_diff) - exp(-PLOMP_B * freq_diff)));
 }
 
 float getDissonanceAt(float x, float z) {
