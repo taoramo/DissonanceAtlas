@@ -3,6 +3,7 @@
 #include "rlgl.h"
 #include "dissonance.h"
 #include <OpenGL/gl.h>
+#include <stdio.h>
 
 RenderTexture2D LoadRenderTextureFloat(int width, int height) {
   RenderTexture2D target = {0};
@@ -85,43 +86,46 @@ int main(void) {
   generate_harmonic_series(&voices, base_freq, 1.0f, MAX_PARTIALS);
   generate_harmonic_series(&voices, base_freq, 1.0f, MAX_PARTIALS);
   generate_harmonic_series(&voices, base_freq, 1.0f, MAX_PARTIALS);
+  // for (int i = 0; i < voices.count * numPartials; i++) {
+  //   printf("freq: %f, amp: %f, i: %d\n", voices.freqs[i], voices.amps[i], i);
+  // }
 
   float maxHeight = 1.0f;
 
   while (!WindowShouldClose()) {
     float otherVoicesDissonance = calculate_dissonance(&voices);
+    // printf("otherVoicesDissonance: %f", otherVoicesDissonance);
     handle_input(&cameraMesh, &voices, otherVoicesDissonance);
 
-    BeginTextureMode(heightmapTexture);
-      ClearBackground(BLANK);
-      BeginShaderMode(bakingShader);
+        BeginTextureMode(heightmapTexture);
+        ClearBackground(BLANK);
+        BeginShaderMode(bakingShader);
         SetShaderValue(bakingShader, baking_numVoicesLoc, &voices.count, SHADER_UNIFORM_INT);
         SetShaderValue(bakingShader, baking_numPartialsLoc, &numPartials, SHADER_UNIFORM_INT);
         SetShaderValueV(bakingShader, baking_voiceFreqsLoc, voices.freqs, SHADER_UNIFORM_FLOAT, voices.count * numPartials);
-        SetShaderValueV(bakingShader, baking_voiceAmplitudesLoc, voices.amps, SHADER_UNIFORM_FLOAT,
-                        voices.count * numPartials);
+        SetShaderValueV(bakingShader, baking_voiceAmplitudesLoc, voices.amps, SHADER_UNIFORM_FLOAT, voices.count * numPartials);
         SetShaderValue(bakingShader, baking_otherVoicesDissonanceLoc, &otherVoicesDissonance, SHADER_UNIFORM_FLOAT);
         float bakingViewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
         SetShaderValue(bakingShader, baking_viewIntsLoc, &bakingViewInts, SHADER_UNIFORM_VEC4);
         SetShaderValue(bakingShader, baking_maxHeightLoc, &maxHeight, SHADER_UNIFORM_FLOAT);
         DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
-      EndShaderMode();
-    EndTextureMode();
+        EndShaderMode();
+        EndTextureMode();
 
     BeginDrawing(); 
     ClearBackground(BLACK);
+    DrawTextureRec(heightmapTexture.texture, (Rectangle){ 0, 0, (float)heightmapTexture.texture.width, (float)-heightmapTexture.texture.height }, (Vector2){ 0, 0 }, WHITE);
 
-      BeginMode3D(cameraMesh);
-        BeginShaderMode(terrainShader);
-          float heightMultiplier = 0.5f;
-          SetShaderValueTexture(terrainShader, terrain_heightMapLoc, heightmapTexture.texture);
-          SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
-          Vector3 objectColor = { 0.8f, 0.0f, 0.0f };
-          SetShaderValue(terrainShader, terrain_objectColorLoc, &objectColor, SHADER_UNIFORM_VEC3);
-          DrawMesh(terrainMesh, terrainMaterial, MatrixIdentity());
-        EndShaderMode();
-        DrawGrid(40, 0.1);
-      EndMode3D();
+            // BeginMode3D(cameraMesh);
+            // SetMaterialTexture(&terrainMaterial, MATERIAL_MAP_HEIGHT, heightmapTexture.texture);
+            // float heightMultiplier = 0.5f;
+            // //SetShaderValueTexture(terrainShader, terrain_heightMapLoc, heightmapTexture.texture);
+            // SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
+            // Vector3 objectColor = { 0.8f, 0.8f, 0.8f };
+            // SetShaderValue(terrainShader, terrain_objectColorLoc, &objectColor, SHADER_UNIFORM_VEC3);
+            // // DrawMesh(terrainMesh, terrainMaterial, MatrixIdentity());
+            // DrawGrid(40, 0.1);
+            // EndMode3D();
 
       BeginMode2D(camera2d);
         DrawFPS(screenWidth - 90, 10);

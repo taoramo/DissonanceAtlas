@@ -7,5 +7,5 @@ SRC = main.c dissonance.c input.c
 
 all: $(NAME)
 
-$(NAME): main.c dissonance.h dissonance.fs dissonance.vs libraylib.a
+$(NAME): $(SRC) dissonance.h dissonance.fs dissonance.vs libraylib.a
 	clang $(SRC) -o $(NAME) $(CFLAGS) $(MACOS_FLAGS) $(LIBFLAGS)

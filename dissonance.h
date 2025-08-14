@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 #include "raylib.h"
-#define MAX_PARTIALS 32
+#define MAX_PARTIALS 6
 #define MAX_VOICES 8 
 
 typedef struct {
