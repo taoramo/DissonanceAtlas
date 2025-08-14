@@ -1,45 +1,51 @@
-#include <math.h>
 #include "dissonance.h"
+#include <math.h>
 
-void GenerateHarmonicSeries(Voice* voice, float baseFreq, float baseAmp, int numPartials, int max_partials) {
-    voice->numPartials = numPartials > max_partials ? max_partials : numPartials;
-    for (int i = 0; i < voice->numPartials; i++) {
-        voice->partials[i].freq = baseFreq * (i + 1);
-        voice->partials[i].amp = baseAmp / (float)(i + 1);
-    }
+#define PLOMP_A 3.5f
+#define PLOMP_B 5.75f
+
+void generate_harmonic_series(Voices* voices, float baseFreq, float baseAmps, int numPartials) {
+  if (voices->count + 1 > MAX_VOICES) return;
+  int partial_count = voices->count * MAX_PARTIALS;
+  for (int i = 0; i < numPartials; i++)
+  {
+    voices->freqs[partial_count + i] = baseFreq * i;
+    voices->amps[partial_count + i] = baseAmps / i;
+  }
+  for (int i = 0; i < MAX_PARTIALS - numPartials; i++)
+    voices->amps[partial_count + numPartials + i] = 0.0f;
+  voices->count++;
 }
 
-float pairwiseDissonance(float f1, float a1, float f2, float a2) {
-    if (a1 == 0.0f || a2 == 0.0f) return 0.0f;
-    float s1 = 3.5f;
-    float s2 = 5.75f;
-    float f_min = fminf(f1, f2);
-    float f_max = fmaxf(f1, f2);
-    float cbw = 25.0f + 75.0f * powf(1.0f + 1.4f * powf(f_min / 1000.0f, 2.0f), 0.69f);
-    if (cbw == 0.0f) return 0.0f;
-    float f_diff_norm = (f_max - f_min) / cbw;
-    return fminf(a1, a2) * (expf(-s1 * f_diff_norm) - expf(-s2 * f_diff_norm));
+float pairwise_dissonance(float f1, float f2, float a1, float a2) {
+    float freq_diff = fabsf(f1 - f2);
+    float amp_prod = a1 * a2;
+    return (amp_prod * (expf(-PLOMP_A * freq_diff) - expf(-PLOMP_B * freq_diff)));
 }
 
-/* Main dissonance calculation for a set of voices */
-float getxzDissonance(float x, float z, float *voiceFreqs, float *voiceAmplitudes, int numVoices, int numPartials) {
-    float totalDissonance = 0.0f;
-    float coeff1;
-    float coeff2;
+//by convention, keep x and z voices as indeces 0 and 1
+float get_xz_dissonance(Voices *voices, float coeff_x, float coeff_z, float otherVoicesDissonance) {
+  float xz_dissonance = 0;
+  for (int i = 0; i < MAX_PARTIALS; i++)
+    voices->freqs[i] *= coeff_x; 
+  for (int i = MAX_PARTIALS; i < 2 * MAX_PARTIALS; i++)
+    voices->freqs[i] *= coeff_z; 
+  for (int i = 0; i < 2; i++)
+    for (int j = i + 1; j < voices->count; j++)
+      xz_dissonance += pairwise_dissonance(voices->freqs[i], voices->freqs[j], voices->amps[i], voices->amps[j]);
+  return otherVoicesDissonance + xz_dissonance;
+}
 
-    for (int i = 0; i < 3; i++) {
-      if (i / numVoices == 1) {coeff1 = x;} 
-      else if (i / numVoices == 2) {coeff1 = z;}
-      else {coeff1 = 1.0;}
-      for (int j = i + 1; j < numVoices * numPartials;j++) {
-        if (j / numVoices == 1) {coeff1 = x;} 
-        else if (j / numVoices == 2) {coeff1 = z;}
-        else {coeff2 = 1.0;}
-        totalDissonance += pairwiseDissonance(
-            voiceFreqs[i] * coeff1, voiceAmplitudes[i],
-            voiceFreqs[j] * coeff2, voiceAmplitudes[j]
-      );
-      }
+float calculate_dissonance(Voices* voices) {
+  float total_dissonance = 0.0f;
+  for (int i = 0; i < voices->count; ++i) {
+    float f1 = voices->freqs[i];
+    float amp1 = voices->amps[i];
+    for (int j = i + 1; j < voices->count; ++j) {
+      float freq_diff = fabsf(f1 - voices->freqs[j]);
+      float amp_prod = amp1 * voices->amps[j];
+      total_dissonance += amp_prod * (expf(-PLOMP_A * freq_diff) - expf(-PLOMP_B * freq_diff));
     }
-    return totalDissonance;
+  }
+  return total_dissonance;
 }

@@ -1,20 +1,33 @@
 #ifndef DISSONANCE_H
 #define DISSONANCE_H
 
-typedef struct {
-    float freq;
-    float amp;
-} Partial;
+#include <stdlib.h>
+#include "raylib.h"
+#define MAX_PARTIALS 32
+#define MAX_VOICES 8 
+#define MAX_FREQS MAX_PARTIALS * MAX_VOICES
 
 typedef struct {
-    Partial partials[32];
-    int numPartials;
+    int count;
+    int numPartials[MAX_VOICES];
+    float baseFreq;
+    float baseAmp;
+    float freqs[MAX_VOICES * MAX_PARTIALS];
+    float amps[MAX_VOICES * MAX_PARTIALS];
+} Voices;
+
+typedef struct {
+  int numPartials;
+  float baseFreq;
+  float baseAmp;
+  float freqs[MAX_PARTIALS];
+  float amps[MAX_PARTIALS];
 } Voice;
 
-void GenerateHarmonicSeries(Voice* voice, float baseFreq, float baseAmp, int numPartials, int max_partials);
-float getCriticalBandwidth(float f);
-float pairwiseDissonance(float f1, float a1, float f2, float a2);
-float getDissonanceAtxz(float x, float z, Voice* voices, int numVoices);
-float getDissonanceAtFreqs(Voice* voices, int numVoices);
+void generate_harmonic_series(Voices* voice, float baseFreq, float baseAmp, int numPartials);
+float pairwise_dissonance(float f1, float a1, float f2, float a2);
+float get_xz_dissonance(Voices *voices, float coeff_x, float coeff_z, float otherVoicesDissonance);
+float calculate_dissonance(Voices* voices);
 
+void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissonance);
 #endif

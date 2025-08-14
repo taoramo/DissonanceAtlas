@@ -2,7 +2,7 @@ NAME = hello
 MACOS_FLAGS = -framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo
 LIBFLAGS = -lraylib -L.
 CFLAGS = -Wextra -Wall
-SRC = main.c
+SRC = main.c dissonance.c input.c
 
 
 all: $(NAME)
