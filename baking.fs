@@ -21,14 +21,9 @@ const float SURFACE_HEIGHT = 4.0;
 
 float pairwiseDissonance(float f1, float a1, float f2, float a2) {
     if (a1 == 0.0 || a2 == 0.0) return 0.0;
-    float s1 = 3.5;
-    float s2 = 5.75;
-    float f_min = min(f1, f2);
-    float f_max = max(f1, f2);
-    float cbw = 25.0 + 75.0 * pow(1.0 + 1.4 * pow(f_min / 1000.0, 2.0), 0.69);
-    if (cbw == 0.0) return 0.0;
-    float f_diff_norm = (f_max - f_min) / cbw;
-    return min(a1, a2) * (exp(-s1 * f_diff_norm) - exp(-s2 * f_diff_norm));
+    float freq_diff = fabsf(f1 - f2);
+    float amp_prod = a1 * a2;
+    return (amp_prod * (expf(-PLOMP_A * freq_diff) - expf(-PLOMP_B * freq_diff)));
 }
 
 float getDissonanceAt(float x, float z) {

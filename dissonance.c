@@ -18,6 +18,7 @@ void generate_harmonic_series(Voices* voices, float baseFreq, float baseAmps, in
 }
 
 float pairwise_dissonance(float f1, float f2, float a1, float a2) {
+    if (a1 == 0.0 || a2 == 0.0) return 0.0;
     float freq_diff = fabsf(f1 - f2);
     float amp_prod = a1 * a2;
     return (amp_prod * (expf(-PLOMP_A * freq_diff) - expf(-PLOMP_B * freq_diff)));

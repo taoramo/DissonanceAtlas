@@ -5,7 +5,6 @@
 #include "raylib.h"
 #define MAX_PARTIALS 32
 #define MAX_VOICES 8 
-#define MAX_FREQS MAX_PARTIALS * MAX_VOICES
 
 typedef struct {
     int count;
@@ -15,14 +14,6 @@ typedef struct {
     float freqs[MAX_VOICES * MAX_PARTIALS];
     float amps[MAX_VOICES * MAX_PARTIALS];
 } Voices;
-
-typedef struct {
-  int numPartials;
-  float baseFreq;
-  float baseAmp;
-  float freqs[MAX_PARTIALS];
-  float amps[MAX_PARTIALS];
-} Voice;
 
 void generate_harmonic_series(Voices* voice, float baseFreq, float baseAmp, int numPartials);
 float pairwise_dissonance(float f1, float a1, float f2, float a2);

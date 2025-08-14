@@ -100,7 +100,7 @@ int main(void) {
     EndTextureMode();
 
     BeginDrawing();
-      ClearBackground(BLACK);
+    ClearBackground(BLACK);
 
       BeginMode3D(cameraMesh);
         SetMaterialTexture(&terrainMaterial, MATERIAL_MAP_ALBEDO, heightmapTexture.texture);
