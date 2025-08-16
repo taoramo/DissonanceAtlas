@@ -6,8 +6,8 @@ out vec4 finalColor;
 uniform int numVoices;
 uniform int numPartials;
 uniform float otherVoicesDissonance;
-uniform float voiceFreqs[256];
-uniform float voiceAmplitudes[256];
+uniform float voiceFreqs[32];
+uniform float voiceAmplitudes[32];
 uniform vec4 viewInts; // We get screen width/height from this
 uniform float maxHeight;
 
@@ -15,20 +15,20 @@ uniform float maxHeight;
 const float SURFACE_WIDTH = 4.0;
 const float SURFACE_HEIGHT = 4.0;
 
-#define PLOMP_A 3.5
-#define PLOMP_B 5.75
-
 /* ============================================================================ */
 /*                  Dissonance Calculation Functions                            */
 /* ============================================================================ */
 
-float pairwiseDissonance(float f1, float f2, float a1, float a2) {
+float pairwiseDissonance(float f1, float a1, float f2, float a2) {
     if (a1 == 0.0 || a2 == 0.0) return 0.0;
-    float fmini = min(f1, f2);
-    float freq_diff = abs(f1 - f2);
-    float amp_prod = a1 * a2;
-    float s = 0.024/(0.021 * fmini + 19);
-    return (amp_prod * (exp(-PLOMP_A * s * freq_diff) - exp(-PLOMP_B * s * freq_diff)));
+    float s1 = 3.5;
+    float s2 = 5.75;
+    float f_min = min(f1, f2);
+    float f_max = max(f1, f2);
+    float cbw = 25.0 + 75.0 * pow(1.0 + 1.4 * pow(f_min / 1000.0, 2.0), 0.69);
+    if (cbw == 0.0) return 0.0;
+    float f_diff_norm = (f_max - f_min) / cbw;
+    return min(a1, a2) * (exp(-s1 * f_diff_norm) - exp(-s2 * f_diff_norm));
 }
 
 float getDissonanceAt(float x, float z) {
@@ -45,8 +45,8 @@ float getDissonanceAt(float x, float z) {
         else if (j / numPartials == 1) {coeff2 = z;}
         else {coeff2 = 1.0;}
         totalDissonance += pairwiseDissonance(
-            voiceFreqs[i] * coeff1, voiceFreqs[j] * coeff2,
-            voiceAmplitudes[i], voiceAmplitudes[j]
+            voiceFreqs[i] * coeff1, voiceAmplitudes[i],
+            voiceFreqs[j] * coeff2, voiceAmplitudes[j]
       );
       }
     }
@@ -64,5 +64,5 @@ void main() {
     float height = getDissonanceAt(worldCoord.x, worldCoord.y);
 
     // Output the normalized height to the red channel.
-    finalColor = vec4(height / (maxHeight * 10), 0.0, 0.0, 1.0);
+    finalColor = vec4(height / maxHeight, 0.0, 0.0, 1.0);
 }

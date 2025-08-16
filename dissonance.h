@@ -18,7 +18,7 @@ typedef struct {
 void generate_harmonic_series(Voices* voice, float baseFreq, float baseAmp, int numPartials);
 float pairwise_dissonance(float f1, float a1, float f2, float a2);
 float get_xz_dissonance(Voices *voices, float coeff_x, float coeff_z, float otherVoicesDissonance);
-float calculate_dissonance(Voices* voices);
+float calculate_dissonance(Voices* voices, int starting_index);
 
 void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissonance);
 #endif

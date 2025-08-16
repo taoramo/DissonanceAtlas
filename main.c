@@ -93,7 +93,7 @@ int main(void) {
   float maxHeight = 1.0f;
 
   while (!WindowShouldClose()) {
-    float otherVoicesDissonance = calculate_dissonance(&voices);
+    float otherVoicesDissonance = calculate_dissonance(&voices, 2);
     // printf("otherVoicesDissonance: %f", otherVoicesDissonance);
     handle_input(&cameraMesh, &voices, otherVoicesDissonance);
 
@@ -114,18 +114,17 @@ int main(void) {
 
     BeginDrawing(); 
     ClearBackground(BLACK);
-    DrawTextureRec(heightmapTexture.texture, (Rectangle){ 0, 0, (float)heightmapTexture.texture.width, (float)-heightmapTexture.texture.height }, (Vector2){ 0, 0 }, WHITE);
+    // DrawTextureRec(heightmapTexture.texture, (Rectangle){ 0, 0, (float)heightmapTexture.texture.width, (float)-heightmapTexture.texture.height }, (Vector2){ 0, 0 }, WHITE);
 
-            // BeginMode3D(cameraMesh);
-            // SetMaterialTexture(&terrainMaterial, MATERIAL_MAP_HEIGHT, heightmapTexture.texture);
-            // float heightMultiplier = 0.5f;
-            // //SetShaderValueTexture(terrainShader, terrain_heightMapLoc, heightmapTexture.texture);
-            // SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
-            // Vector3 objectColor = { 0.8f, 0.8f, 0.8f };
-            // SetShaderValue(terrainShader, terrain_objectColorLoc, &objectColor, SHADER_UNIFORM_VEC3);
-            // // DrawMesh(terrainMesh, terrainMaterial, MatrixIdentity());
-            // DrawGrid(40, 0.1);
-            // EndMode3D();
+            BeginMode3D(cameraMesh);
+            SetMaterialTexture(&terrainMaterial, MATERIAL_MAP_HEIGHT, heightmapTexture.texture);
+            float heightMultiplier = 1.0f;
+            SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
+            Vector3 objectColor = { 0.8f, 0.8f, 0.8f };
+            SetShaderValue(terrainShader, terrain_objectColorLoc, &objectColor, SHADER_UNIFORM_VEC3);
+            DrawMesh(terrainMesh, terrainMaterial, MatrixIdentity());
+            DrawGrid(40, 0.1);
+            EndMode3D();
 
       BeginMode2D(camera2d);
         DrawFPS(screenWidth - 90, 10);

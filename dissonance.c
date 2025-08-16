@@ -18,13 +18,16 @@ void generate_harmonic_series(Voices* voices, float baseFreq, float baseAmps, in
   voices->count++;
 }
 
-float pairwise_dissonance(float f1, float f2, float a1, float a2) {
+float pairwise_dissonance(float f1, float a1, float f2, float a2) {
     if (a1 == 0.0 || a2 == 0.0) return 0.0;
-    float fmini = fmin(f1, f2);
-    float freq_diff = fabsf(f1 - f2);
-    float amp_prod = a1 * a2;
-    float s = 0.024/(0.021 * fmini + 19);
-    return (amp_prod * (expf(-PLOMP_A * s * freq_diff) - expf(-PLOMP_B * s * freq_diff)));
+    float s1 = 3.5;
+    float s2 = 5.75;
+    float f_min = fmin(f1, f2);
+    float f_max = fmax(f1, f2);
+    float cbw = 25.0 + 75.0 * powf(1.0 + 1.4 * powf(f_min / 1000.0, 2.0), 0.69);
+    if (cbw == 0.0) return 0.0;
+    float f_diff_norm = (f_max - f_min) / cbw;
+    return fmin(a1, a2) * (expf(-s1 * f_diff_norm) - expf(-s2 * f_diff_norm));
 }
 
 //by convention, keep x and z voices as indeces 0 and 1
@@ -36,24 +39,25 @@ float get_xz_dissonance(Voices *voices, float coeff_x, float coeff_z, float othe
     voices->freqs[i] *= coeff_z; 
   for (int i = 0; i < 2; i++)
     for (int j = i + 1; j < voices->count; j++)
-      xz_dissonance += pairwise_dissonance(voices->freqs[i], voices->freqs[j], voices->amps[i], voices->amps[j]);
+      xz_dissonance += pairwise_dissonance(voices->freqs[i], voices->amps[i], voices->freqs[j], voices->amps[j]);
   return otherVoicesDissonance + xz_dissonance;
 }
 
-float calculate_dissonance(Voices* voices) {
+float calculate_dissonance(Voices* voices, int starting_index) {
   float total_dissonance = 0.0f;
   // for (int i = 0; i < voices->count * MAX_PARTIALS; i++) {
   //   printf("freq: %f, amp: %f, i: %d\n", voices->freqs[i], voices->amps[i], i);
   // }
-  for (int i = 0; i < voices->count * MAX_PARTIALS; ++i) {
+  for (int i = starting_index; i < voices->count * MAX_PARTIALS; ++i) {
     float f1 = voices->freqs[i];
     float amp1 = voices->amps[i];
     for (int j = i + 1; j < voices->count * MAX_PARTIALS; ++j) {
-      float fmini = fmin(f1, voices->freqs[j]);
-      float freq_diff = fabsf(f1 - voices->freqs[j]);
+      float fmin = fminf(f1, voices->freqs[j]);
+      float fmax = fmaxf(f1, voices->freqs[j]);
       float amp_prod = amp1 * voices->amps[j];
-      float s = 0.024/(0.021 * fmini + 19);
-      total_dissonance += amp_prod * (expf(-PLOMP_A * s * freq_diff) - expf(-PLOMP_B * s * freq_diff));
+      float cbw = 25.0 + 75.0 * powf(1.0 + 1.4 * powf(fmin / 1000.0, 2.0), 0.69);
+      float f_diff_norm = (fmax - fmin) / cbw;
+      total_dissonance += amp_prod * (expf(-PLOMP_A * f_diff_norm) - expf(-PLOMP_B * f_diff_norm));
       // printf("total_dissonance: %f\n", total_dissonance);
     }
   }
