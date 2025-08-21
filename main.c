@@ -9,7 +9,7 @@
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
 
-void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissonance) {
+void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissonance, float worldPlaneSize) {
   UpdateCameraPro(cameraMesh,
                   (Vector3){IsKeyDown(KEY_W) * 0.1f - IsKeyDown(KEY_S) * 0.1f,
                             IsKeyDown(KEY_D) * 0.1f - IsKeyDown(KEY_A) * 0.1f,
@@ -20,7 +20,9 @@ void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissona
 
   if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
     // Sample the terrain at mouse position - read-only operation
-    Ray ray = GetMouseRay(GetMousePosition(), *cameraMesh);
+    Vector2 mousePos = GetMousePosition();
+    Ray ray = GetMouseRay(mousePos, *cameraMesh);
+
     bool hit = false;
     Vector3 intersectionPoint = {0};
     float t = 0.0f;
@@ -40,23 +42,39 @@ void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissona
       }
 
       t += 0.1f; // Step size for raymarching
-      if (t > 200.0f)
+      if (t > 200.0f) {
         break; // Maximum ray distance
+      }
+
+      // Check if ray height is below terrain height (considering height multiplier)
+      if (p.y <= terrainHeight * 50.0f) { // 50.0f is the height multiplier used in rendering
+        intersectionPoint = p;
+        hit = true;
+        printf("Intersection found at step %d, t=%.2f\n", i, t);
+        break;
+      }
+
+      t += 0.1f; // Step size for raymarching
+      if (t > 200.0f) {
+        printf("Raymarching reached maximum distance t=%.1f\n", t);
+        break; // Maximum ray distance
+      }
     }
 
     if (hit) {
-      // Just sample/read the values - don't modify anything
-      float coeff_x = intersectionPoint.x;
-      float coeff_z = intersectionPoint.z;
+      // Convert terrain coordinates (-2.0 to +2.0) to dissonance coordinates (0.0 to 4.0)
+      float coeff_x = intersectionPoint.x + 0.5 * worldPlaneSize; // Convert from -2..+2 to 0..4
+      float coeff_z = intersectionPoint.z + 0.5 * worldPlaneSize; // Convert from -2..+2 to 0..4
       float dissonance = get_xz_dissonance(voices, coeff_x, coeff_z, otherVoicesDissonance);
 
       printf("Terrain Sample (Read-Only):\n");
       printf("  Position:      x=%.3f, z=%.3f, y=%.3f\n", intersectionPoint.x, intersectionPoint.z,
              intersectionPoint.y);
-      printf("  Coefficients:  coeff_x=%.3f, coeff_z=%.3f\n", coeff_x, coeff_z);
+      printf("  Coefficients:  coeff_x=%.3f, coeff_z=%.3f (converted to 0-4 range)\n", coeff_x, coeff_z);
       printf("  Frequencies:   f_x=%.2f Hz, f_z=%.2f Hz\n", voices->freqs[0] * coeff_x,
              voices->freqs[MAX_PARTIALS] * coeff_z);
-      printf("  Dissonance:    %.6f\n\n", dissonance);
+      printf("  Dissonance:    %.6f\n", dissonance);
+      printf("  Terrain Height: %.6f\n\n", get_xz_dissonance(voices, coeff_x, coeff_z, otherVoicesDissonance));
     } else {
       printf("No terrain intersection found.\n\n");
     }
@@ -82,8 +100,8 @@ unsigned int set_up_grid(GLuint *terrainVAO, GLuint *terrainVBO, GLuint *terrain
   float halfSize = worldPlaneSize * 0.5f;
   int vertexIndex = 0;
 
-  for (int z = 0; z <= meshResolution; z++) {
-    for (int x = 0; x <= meshResolution; x++) {
+  for (unsigned int z = 0; z <= meshResolution; z++) {
+    for (unsigned int x = 0; x <= meshResolution; x++) {
       // Position (x, 0, z) - y will be sampled from texture in shader
       vertices[vertexIndex * 8 + 0] = x * step - halfSize; // x
       vertices[vertexIndex * 8 + 1] = 0.0f;                // y (will be displaced by shader)
@@ -104,8 +122,8 @@ unsigned int set_up_grid(GLuint *terrainVAO, GLuint *terrainVBO, GLuint *terrain
 
   // Generate indices
   int indexIndex = 0;
-  for (int z = 0; z < meshResolution; z++) {
-    for (int x = 0; x < meshResolution; x++) {
+  for (unsigned int z = 0; z < meshResolution; z++) {
+    for (unsigned int x = 0; x < meshResolution; x++) {
       int topLeft = z * (meshResolution + 1) + x;
       int topRight = topLeft + 1;
       int bottomLeft = (z + 1) * (meshResolution + 1) + x;
@@ -258,7 +276,7 @@ int main(void) {
     generate_harmonic_series(&voices, base_freq * voice4, 1.0f, MAX_PARTIALS);
     generate_harmonic_series(&voices, base_freq * voice5, 1.0f, MAX_PARTIALS);
     float otherVoicesDissonance = calculate_dissonance(&voices, 2);
-    handle_input(&cameraMesh, &voices, otherVoicesDissonance);
+    handle_input(&cameraMesh, &voices, otherVoicesDissonance, worldPlaneSize);
 
     BeginTextureMode(heightmapTexture);
     ClearBackground(BLANK);
@@ -290,7 +308,7 @@ int main(void) {
     int textureUnit = 1;
     SetShaderValue(terrainShader, heightMapLoc, &textureUnit, SHADER_UNIFORM_INT);
 
-    float heightMultiplier = 2.0f;
+    float heightMultiplier = 1.0f;
     SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
 
     Matrix modelView = GetCameraMatrix(cameraMesh);
