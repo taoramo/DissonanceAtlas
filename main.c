@@ -1,9 +1,140 @@
+#include "dissonance.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
-#include "dissonance.h"
 #include <OpenGL/gl.h>
+#include <OpenGL/gl3.h>
 #include <stdio.h>
+
+void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissonance) {
+  UpdateCameraPro(cameraMesh,
+                  (Vector3){IsKeyDown(KEY_W) * 0.1f - IsKeyDown(KEY_S) * 0.1f,
+                            IsKeyDown(KEY_D) * 0.1f - IsKeyDown(KEY_A) * 0.1f,
+                            IsKeyDown(KEY_R) * 0.1f - IsKeyDown(KEY_F) * 0.1f},
+                  (Vector3){IsKeyDown(KEY_RIGHT) * 0.5f - IsKeyDown(KEY_LEFT) * 0.5f,
+                            IsKeyDown(KEY_DOWN) * 0.5f - IsKeyDown(KEY_UP) * 0.5f, 0.0f},
+                  GetMouseWheelMove() * 2.0f);
+
+  if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+    Ray ray = GetMouseRay(GetMousePosition(), *cameraMesh);
+    bool hit = false;
+    Vector3 intersectionPoint = {0};
+    float t = 0.0f;
+    Vector3 p = ray.position;
+    float h_prev = p.y - get_xz_dissonance(voices, p.x, p.y, otherVoicesDissonance);
+
+    for (int i = 0; i < 256; i++) {
+      t += fmaxf(0.01f, h_prev * 0.5f);
+      p = Vector3Add(ray.position, Vector3Scale(ray.direction, t));
+      float h_curr = p.y - get_xz_dissonance(voices, p.x, p.z, otherVoicesDissonance) + otherVoicesDissonance;
+      if (h_curr * h_prev < 0.0) {
+        intersectionPoint = p;
+        hit = true;
+        break;
+      }
+      h_prev = h_curr;
+      if (t > 200.0f)
+        break;
+    }
+
+    if (hit) {
+      printf("Intersection Found!\n");
+      printf("  Coefficients:  coeff_x=%.3f, coeff_z=%.3f\n", intersectionPoint.x, intersectionPoint.z);
+      printf("  Frequencies:   f_x=%.2f Hz, f_z=%.2f Hz\n", voices->freqs[0] * intersectionPoint.x,
+             voices->freqs[MAX_PARTIALS] * intersectionPoint.z);
+      printf("  Dissonance:    y=%.3f\n\n", intersectionPoint.y);
+    }
+  }
+}
+
+unsigned int set_up_grid(GLuint *terrainVAO, GLuint *terrainVBO, GLuint *terrainEBO, unsigned int meshResolution,
+                         float worldPlaneSize) {
+  glGenVertexArrays(1, terrainVAO);
+  glGenBuffers(1, terrainVBO);
+  glGenBuffers(1, terrainEBO);
+
+  // Generate grid vertices
+  int numVertices = (meshResolution + 1) * (meshResolution + 1);
+  int numIndices = meshResolution * meshResolution * 6;
+
+  float *vertices =
+      (float *)malloc(numVertices * 8 * sizeof(float)); // 8 floats per vertex: pos(3) + normal(3) + texcoord(2)
+  unsigned int *indices = (unsigned int *)malloc(numIndices * sizeof(unsigned int));
+
+  // Generate vertices
+  float step = worldPlaneSize / meshResolution;
+  float halfSize = worldPlaneSize * 0.5f;
+  int vertexIndex = 0;
+
+  for (int z = 0; z <= meshResolution; z++) {
+    for (int x = 0; x <= meshResolution; x++) {
+      // Position (x, 0, z) - y will be sampled from texture in shader
+      vertices[vertexIndex * 8 + 0] = x * step - halfSize; // x
+      vertices[vertexIndex * 8 + 1] = 0.0f;                // y (will be displaced by shader)
+      vertices[vertexIndex * 8 + 2] = z * step - halfSize; // z
+
+      // Normal (will be calculated in shader)
+      vertices[vertexIndex * 8 + 3] = 0.0f; // nx
+      vertices[vertexIndex * 8 + 4] = 1.0f; // ny
+      vertices[vertexIndex * 8 + 5] = 0.0f; // nz
+
+      // Texture coordinates
+      vertices[vertexIndex * 8 + 6] = (float)x / meshResolution; // u
+      vertices[vertexIndex * 8 + 7] = (float)z / meshResolution; // v
+
+      vertexIndex++;
+    }
+  }
+
+  // Generate indices
+  int indexIndex = 0;
+  for (int z = 0; z < meshResolution; z++) {
+    for (int x = 0; x < meshResolution; x++) {
+      int topLeft = z * (meshResolution + 1) + x;
+      int topRight = topLeft + 1;
+      int bottomLeft = (z + 1) * (meshResolution + 1) + x;
+      int bottomRight = bottomLeft + 1;
+
+      // First triangle
+      indices[indexIndex++] = topLeft;
+      indices[indexIndex++] = bottomLeft;
+      indices[indexIndex++] = topRight;
+
+      // Second triangle
+      indices[indexIndex++] = topRight;
+      indices[indexIndex++] = bottomLeft;
+      indices[indexIndex++] = bottomRight;
+    }
+  }
+
+  // Upload to GPU
+  glBindVertexArray(*terrainVAO);
+
+  glBindBuffer(GL_ARRAY_BUFFER, *terrainVBO);
+  glBufferData(GL_ARRAY_BUFFER, numVertices * 8 * sizeof(float), vertices, GL_STATIC_DRAW);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *terrainEBO);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices * sizeof(unsigned int), indices, GL_STATIC_DRAW);
+
+  // Set up vertex attributes to match shader expectations
+  // Position (location 0) - matches shader's aPos
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
+  glEnableVertexAttribArray(0);
+
+  // Texture coordinates (location 1) - matches shader's aTexCoords
+  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(6 * sizeof(float)));
+  glEnableVertexAttribArray(1);
+
+  // Note: Normal (location 2) is not used by shader - it calculates normals from heightmap
+
+  glBindVertexArray(0);
+
+  // Clean up CPU memory
+  free(vertices);
+  free(indices);
+
+  return numIndices;
+}
 
 RenderTexture2D LoadRenderTextureFloat(int width, int height) {
   RenderTexture2D target = {0};
@@ -34,6 +165,8 @@ int main(void) {
   /* --- Initialization --- */
   const int screenWidth = 1280;
   const int screenHeight = 720;
+  const int heightmapResolution = 1200;
+  const float worldPlaneSize = 4.0f;
   InitWindow(screenWidth, screenHeight, "Dissonance Visualizer");
   SetTargetFPS(60);
 
@@ -66,20 +199,28 @@ int main(void) {
     return 1;
   }
   int terrain_heightMultiplierLoc = GetShaderLocation(terrainShader, "heightMultiplier");
-  int terrain_objectColorLoc = GetShaderLocation(terrainShader, "objectColor");
-  int terrain_heightMapLoc = GetShaderLocation(terrainShader, "heightMap");
+  int terrain_mvpLoc = GetShaderLocation(terrainShader, "mvp");
+  int terrain_modelViewLoc = GetShaderLocation(terrainShader, "modelView");
+  int terrain_normalMatrixLoc = GetShaderLocation(terrainShader, "normalMatrix");
+  int terrain_lightPosLoc = GetShaderLocation(terrainShader, "lightPos");
+  int terrain_textureSizeLoc = GetShaderLocation(terrainShader, "textureSize");
+  int terrain_lightColorLoc = GetShaderLocation(terrainShader, "lightColor");
+  int terrain_worldPlaneSizeLoc = GetShaderLocation(terrainShader, "worldPlaneSize");
   // int terrain_maxHeightLoc = GetShaderLocation(terrainShader, "maxHeight");
 
   RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
-  RenderTexture2D heightmapTexture = LoadRenderTextureFloat(screenWidth, screenHeight);
+  RenderTexture2D heightmapTexture = LoadRenderTextureFloat(heightmapResolution, heightmapResolution);
   SetTextureFilter(heightmapTexture.texture, TEXTURE_FILTER_BILINEAR);
   SetTextureWrap(heightmapTexture.texture, TEXTURE_WRAP_CLAMP);
 
-  Mesh terrainMesh = GenMeshPlane(4.0f, 4.0f, 256, 256);
-  Material terrainMaterial = LoadMaterialDefault();
-  terrainMaterial.shader = terrainShader;
+  const int meshResolution = 1200;
+
+  // Create OpenGL buffers for terrain grid
+  GLuint terrainVAO, terrainVBO, terrainEBO;
+  unsigned int numIndices = set_up_grid(&terrainVAO, &terrainVBO, &terrainEBO, meshResolution, worldPlaneSize);
 
   /* --- Voice Data Setup --- */
+  // voices really contain the spectra at base_freq
   Voices voices = {0};
   int numPartials = MAX_PARTIALS;
   float base_freq = 220.0f;
@@ -91,44 +232,74 @@ int main(void) {
   // }
 
   float maxHeight = 1.0f;
+  Vector3 lightPos = {2.0f, 8.0f, 3.0f}; 
 
   while (!WindowShouldClose()) {
     float otherVoicesDissonance = calculate_dissonance(&voices, 2);
-    // printf("otherVoicesDissonance: %f", otherVoicesDissonance);
     handle_input(&cameraMesh, &voices, otherVoicesDissonance);
 
-        BeginTextureMode(heightmapTexture);
-        ClearBackground(BLANK);
-        BeginShaderMode(bakingShader);
-        SetShaderValue(bakingShader, baking_numVoicesLoc, &voices.count, SHADER_UNIFORM_INT);
-        SetShaderValue(bakingShader, baking_numPartialsLoc, &numPartials, SHADER_UNIFORM_INT);
-        SetShaderValueV(bakingShader, baking_voiceFreqsLoc, voices.freqs, SHADER_UNIFORM_FLOAT, voices.count * numPartials);
-        SetShaderValueV(bakingShader, baking_voiceAmplitudesLoc, voices.amps, SHADER_UNIFORM_FLOAT, voices.count * numPartials);
-        SetShaderValue(bakingShader, baking_otherVoicesDissonanceLoc, &otherVoicesDissonance, SHADER_UNIFORM_FLOAT);
-        float bakingViewInts[] = {0.0, 0.0, (float)screenWidth, (float)screenHeight};
-        SetShaderValue(bakingShader, baking_viewIntsLoc, &bakingViewInts, SHADER_UNIFORM_VEC4);
-        SetShaderValue(bakingShader, baking_maxHeightLoc, &maxHeight, SHADER_UNIFORM_FLOAT);
-        DrawRectangle(0, 0, screenWidth, screenHeight, WHITE);
-        EndShaderMode();
-        EndTextureMode();
+    BeginTextureMode(heightmapTexture);
+    ClearBackground(BLANK);
+    BeginShaderMode(bakingShader);
+    SetShaderValue(bakingShader, baking_numVoicesLoc, &voices.count, SHADER_UNIFORM_INT);
+    SetShaderValue(bakingShader, baking_numPartialsLoc, &numPartials, SHADER_UNIFORM_INT);
+    SetShaderValueV(bakingShader, baking_voiceFreqsLoc, voices.freqs, SHADER_UNIFORM_FLOAT, voices.count * numPartials);
+    SetShaderValueV(bakingShader, baking_voiceAmplitudesLoc, voices.amps, SHADER_UNIFORM_FLOAT,
+                    voices.count * numPartials);
+    SetShaderValue(bakingShader, baking_otherVoicesDissonanceLoc, &otherVoicesDissonance, SHADER_UNIFORM_FLOAT);
+    float bakingViewInts[] = {0.0, 0.0, (float)heightmapResolution, (float)heightmapResolution};
+    SetShaderValue(bakingShader, baking_viewIntsLoc, &bakingViewInts, SHADER_UNIFORM_VEC4);
+    SetShaderValue(bakingShader, baking_maxHeightLoc, &maxHeight, SHADER_UNIFORM_FLOAT);
+    DrawRectangle(0, 0, heightmapResolution, heightmapResolution, WHITE);
+    EndShaderMode();
+    EndTextureMode();
 
-    BeginDrawing(); 
+    BeginDrawing();
     ClearBackground(BLACK);
-    // DrawTextureRec(heightmapTexture.texture, (Rectangle){ 0, 0, (float)heightmapTexture.texture.width, (float)-heightmapTexture.texture.height }, (Vector2){ 0, 0 }, WHITE);
+    // DrawTextureRec(heightmapTexture.texture, (Rectangle){ 0, 0, (float)heightmapTexture.texture.width,
+    // (float)-heightmapTexture.texture.height }, (Vector2){ 0, 0 }, WHITE);
 
-            BeginMode3D(cameraMesh);
-            SetMaterialTexture(&terrainMaterial, MATERIAL_MAP_HEIGHT, heightmapTexture.texture);
-            float heightMultiplier = 1.0f;
-            SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
-            Vector3 objectColor = { 0.8f, 0.8f, 0.8f };
-            SetShaderValue(terrainShader, terrain_objectColorLoc, &objectColor, SHADER_UNIFORM_VEC3);
-            DrawMesh(terrainMesh, terrainMaterial, MatrixIdentity());
-            DrawGrid(40, 0.1);
-            EndMode3D();
+    BeginMode3D(cameraMesh);
 
-      BeginMode2D(camera2d);
-        DrawFPS(screenWidth - 90, 10);
-      EndMode2D();
+    // Bind heightmap texture to texture unit 1
+    rlActiveTextureSlot(1);
+    glBindTexture(GL_TEXTURE_2D, heightmapTexture.texture.id);
+    int heightMapLoc = GetShaderLocation(terrainShader, "heightMap");
+    int textureUnit = 1;
+    SetShaderValue(terrainShader, heightMapLoc, &textureUnit, SHADER_UNIFORM_INT);
+
+    float heightMultiplier = 2.0f;
+    SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
+
+    Matrix modelView = GetCameraMatrix(cameraMesh);
+    Matrix projection = rlGetMatrixProjection();
+    Matrix mvp = MatrixMultiply(modelView, projection);
+    Matrix normalMatrix = MatrixTranspose(MatrixInvert(modelView));
+
+    Vector3 lightPosView = Vector3Transform(lightPos, modelView);
+
+    SetShaderValueMatrix(terrainShader, terrain_mvpLoc, mvp);
+    SetShaderValueMatrix(terrainShader, terrain_modelViewLoc, modelView);
+    SetShaderValueMatrix(terrainShader, terrain_normalMatrixLoc, normalMatrix);
+    SetShaderValue(terrainShader, terrain_lightPosLoc, &lightPosView, SHADER_UNIFORM_VEC3);
+    float texSize = (float)heightmapResolution;
+    SetShaderValue(terrainShader, terrain_textureSizeLoc, &texSize, SHADER_UNIFORM_FLOAT);
+    Vector3 lightColor = {1.0f, 0.95f, 0.8f}; // Warm white light
+    SetShaderValue(terrainShader, terrain_lightColorLoc, &lightColor, SHADER_UNIFORM_VEC3);
+    float planeSize = worldPlaneSize;
+    SetShaderValue(terrainShader, terrain_worldPlaneSizeLoc, &planeSize, SHADER_UNIFORM_FLOAT);
+
+    // Render terrain using direct OpenGL
+    glBindVertexArray(terrainVAO);
+    glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+
+    DrawGrid(40, 0.1);
+    EndMode3D();
+
+    BeginMode2D(camera2d);
+    DrawFPS(screenWidth - 90, 10);
+    EndMode2D();
     EndDrawing();
   }
 
@@ -136,6 +307,11 @@ int main(void) {
   UnloadRenderTexture(heightmapTexture);
   UnloadShader(bakingShader);
   UnloadShader(terrainShader);
-  UnloadMesh(terrainMesh);
+
+  // Clean up OpenGL resources
+  glDeleteVertexArrays(1, &terrainVAO);
+  glDeleteBuffers(1, &terrainVBO);
+  glDeleteBuffers(1, &terrainEBO);
+
   CloseWindow();
 }
