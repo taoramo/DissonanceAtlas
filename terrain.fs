@@ -34,14 +34,14 @@ void main()
     // fragment to light
     vec3 lightDir = normalize(lightPos - ViewFragPos);
 
-    float ambientStrength = 0.0;
+    float ambientStrength = 0.5;
     vec3 ambient = ambientStrength * lightColor;
 
     float diff = max(dot(norm, lightDir), 0.0);
     diff = pow(diff, 0.6);
     vec3 diffuse = diff * lightColor * 1.5;
 
-    float specularStrength = 1.2;
+    float specularStrength = 0.5;
     vec3 viewDir = normalize(-ViewFragPos); // In view space, camera is at (0,0,0)
     vec3 reflectDir = reflect(-lightDir, norm);
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 8.0);
