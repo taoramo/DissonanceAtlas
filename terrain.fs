@@ -59,9 +59,6 @@ void main()
     float metallicBrightness = 1.0 + 0.5 * height;
     result *= metallicBrightness;
 
-    // float sheen = pow(max(dot(norm, viewDir), 0.0), 2.0);
-    // result += sheen * vec3(0.1, 0.1, 0.1);
-
     result = min(result, vec3(1.0));
 
     FragColor = vec4(result, 1.0);

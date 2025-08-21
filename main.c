@@ -2,9 +2,12 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
+#define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl.h>
 #include <OpenGL/gl3.h>
 #include <stdio.h>
+#define RAYGUI_IMPLEMENTATION
+#include "raygui.h"
 
 void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissonance) {
   UpdateCameraPro(cameraMesh,
@@ -16,33 +19,46 @@ void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissona
                   GetMouseWheelMove() * 2.0f);
 
   if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+    // Sample the terrain at mouse position - read-only operation
     Ray ray = GetMouseRay(GetMousePosition(), *cameraMesh);
     bool hit = false;
     Vector3 intersectionPoint = {0};
     float t = 0.0f;
-    Vector3 p = ray.position;
-    float h_prev = p.y - get_xz_dissonance(voices, p.x, p.y, otherVoicesDissonance);
 
-    for (int i = 0; i < 256; i++) {
-      t += fmaxf(0.01f, h_prev * 0.5f);
-      p = Vector3Add(ray.position, Vector3Scale(ray.direction, t));
-      float h_curr = p.y - get_xz_dissonance(voices, p.x, p.z, otherVoicesDissonance) + otherVoicesDissonance;
-      if (h_curr * h_prev < 0.0) {
+    // Simple raymarching to find terrain intersection
+    for (int i = 0; i < 1000; i++) {
+      Vector3 p = Vector3Add(ray.position, Vector3Scale(ray.direction, t));
+
+      // Get the terrain height at this XZ position
+      float terrainHeight = get_xz_dissonance(voices, p.x, p.z, otherVoicesDissonance);
+
+      // Check if ray height is below terrain height (considering height multiplier)
+      if (p.y <= terrainHeight * 50.0f) { // 50.0f is the height multiplier used in rendering
         intersectionPoint = p;
         hit = true;
         break;
       }
-      h_prev = h_curr;
+
+      t += 0.1f; // Step size for raymarching
       if (t > 200.0f)
-        break;
+        break; // Maximum ray distance
     }
 
     if (hit) {
-      printf("Intersection Found!\n");
-      printf("  Coefficients:  coeff_x=%.3f, coeff_z=%.3f\n", intersectionPoint.x, intersectionPoint.z);
-      printf("  Frequencies:   f_x=%.2f Hz, f_z=%.2f Hz\n", voices->freqs[0] * intersectionPoint.x,
-             voices->freqs[MAX_PARTIALS] * intersectionPoint.z);
-      printf("  Dissonance:    y=%.3f\n\n", intersectionPoint.y);
+      // Just sample/read the values - don't modify anything
+      float coeff_x = intersectionPoint.x;
+      float coeff_z = intersectionPoint.z;
+      float dissonance = get_xz_dissonance(voices, coeff_x, coeff_z, otherVoicesDissonance);
+
+      printf("Terrain Sample (Read-Only):\n");
+      printf("  Position:      x=%.3f, z=%.3f, y=%.3f\n", intersectionPoint.x, intersectionPoint.z,
+             intersectionPoint.y);
+      printf("  Coefficients:  coeff_x=%.3f, coeff_z=%.3f\n", coeff_x, coeff_z);
+      printf("  Frequencies:   f_x=%.2f Hz, f_z=%.2f Hz\n", voices->freqs[0] * coeff_x,
+             voices->freqs[MAX_PARTIALS] * coeff_z);
+      printf("  Dissonance:    %.6f\n\n", dissonance);
+    } else {
+      printf("No terrain intersection found.\n\n");
     }
   }
 }
@@ -232,9 +248,15 @@ int main(void) {
   // }
 
   float maxHeight = 1.0f;
-  Vector3 lightPos = {2.0f, 8.0f, 3.0f}; 
+  Vector3 lightPos = {2.0f, 8.0f, 3.0f};
+
+  float voice4 = 1.0;
+  float voice5 = 1.0;
 
   while (!WindowShouldClose()) {
+    voices.count = 3;
+    generate_harmonic_series(&voices, base_freq * voice4, 1.0f, MAX_PARTIALS);
+    generate_harmonic_series(&voices, base_freq * voice5, 1.0f, MAX_PARTIALS);
     float otherVoicesDissonance = calculate_dissonance(&voices, 2);
     handle_input(&cameraMesh, &voices, otherVoicesDissonance);
 
@@ -298,6 +320,10 @@ int main(void) {
     EndMode3D();
 
     BeginMode2D(camera2d);
+    GuiSlider((Rectangle){0.1f * screenWidth, 0.9f * screenHeight, 0.1f * screenWidth, 0.01 * screenHeight}, "voice 4",
+              NULL, &voice4, 0.0f, 4.0f);
+    GuiSlider((Rectangle){0.1f * screenWidth, 0.92f * screenHeight, 0.1f * screenWidth, 0.01 * screenHeight}, "voice 5",
+              NULL, &voice5, 0.0f, 4.0f);
     DrawFPS(screenWidth - 90, 10);
     EndMode2D();
     EndDrawing();
