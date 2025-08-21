@@ -13,12 +13,12 @@ uniform vec3 lightColor;
 void main()
 {
     // Color gradient based on MODEL space height
-    float height = ModelFragPos.y / heightMultiplier;
+    float height = ModelFragPos.y / (heightMultiplier * 1.0);
 
     // Create a metallic gradient from deep blue to red
     vec3 color1 = vec3(0.05, 0.1, 0.3);  // Deep blue (valleys)
-    vec3 color2 = vec3(0.2, 0.1, 0.4);   // Deep purple (low-mid)
-    vec3 color3 = vec3(0.4, 0.1, 0.6);   // Purple (mid-level)
+    vec3 color2 = vec3(0.3, 0.2, 0.5);   // Deep purple (low-mid)
+    vec3 color3 = vec3(0.5, 0.1, 0.7);   // Purple (mid-level)
     vec3 color4 = vec3(0.8, 0.2, 0.4);   // Magenta-red (highlands)
     vec3 color5 = vec3(1.0, 0.3, 0.3);   // Bright red (peaks)
 
@@ -34,7 +34,7 @@ void main()
     // fragment to light
     vec3 lightDir = normalize(lightPos - ViewFragPos);
 
-    float ambientStrength = 0.5;
+    float ambientStrength = 0.0;
     vec3 ambient = ambientStrength * lightColor;
 
     float diff = max(dot(norm, lightDir), 0.0);

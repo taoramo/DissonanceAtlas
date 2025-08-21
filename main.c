@@ -9,7 +9,8 @@
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
 
-void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissonance, float worldPlaneSize) {
+void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissonance, float worldPlaneSize,
+                  float maxHeight) {
   UpdateCameraPro(cameraMesh,
                   (Vector3){IsKeyDown(KEY_W) * 0.1f - IsKeyDown(KEY_S) * 0.1f,
                             IsKeyDown(KEY_D) * 0.1f - IsKeyDown(KEY_A) * 0.1f,
@@ -26,16 +27,17 @@ void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissona
     bool hit = false;
     Vector3 intersectionPoint = {0};
     float t = 0.0f;
+    Vector3 p = {0};
 
     // Simple raymarching to find terrain intersection
     for (int i = 0; i < 1000; i++) {
-      Vector3 p = Vector3Add(ray.position, Vector3Scale(ray.direction, t));
+      p = Vector3Add(ray.position, Vector3Scale(ray.direction, t));
 
       // Get the terrain height at this XZ position
-      float terrainHeight = get_xz_dissonance(voices, p.x, p.z, otherVoicesDissonance);
+      float terrainHeight = get_xz_dissonance(voices, p.x + 0.5 * worldPlaneSize, p.z + 0.5 * worldPlaneSize, otherVoicesDissonance);
 
       // Check if ray height is below terrain height (considering height multiplier)
-      if (p.y <= terrainHeight * 50.0f) { // 50.0f is the height multiplier used in rendering
+      if (p.y <= terrainHeight * maxHeight) { // 50.0f is the height multiplier used in rendering
         intersectionPoint = p;
         hit = true;
         break;
@@ -43,20 +45,6 @@ void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissona
 
       t += 0.1f; // Step size for raymarching
       if (t > 200.0f) {
-        break; // Maximum ray distance
-      }
-
-      // Check if ray height is below terrain height (considering height multiplier)
-      if (p.y <= terrainHeight * 50.0f) { // 50.0f is the height multiplier used in rendering
-        intersectionPoint = p;
-        hit = true;
-        printf("Intersection found at step %d, t=%.2f\n", i, t);
-        break;
-      }
-
-      t += 0.1f; // Step size for raymarching
-      if (t > 200.0f) {
-        printf("Raymarching reached maximum distance t=%.1f\n", t);
         break; // Maximum ray distance
       }
     }
@@ -69,12 +57,11 @@ void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissona
 
       printf("Terrain Sample (Read-Only):\n");
       printf("  Position:      x=%.3f, z=%.3f, y=%.3f\n", intersectionPoint.x, intersectionPoint.z,
-             intersectionPoint.y);
+              intersectionPoint.y);
       printf("  Coefficients:  coeff_x=%.3f, coeff_z=%.3f (converted to 0-4 range)\n", coeff_x, coeff_z);
       printf("  Frequencies:   f_x=%.2f Hz, f_z=%.2f Hz\n", voices->freqs[0] * coeff_x,
-             voices->freqs[MAX_PARTIALS] * coeff_z);
+              voices->freqs[MAX_PARTIALS] * coeff_z);
       printf("  Dissonance:    %.6f\n", dissonance);
-      printf("  Terrain Height: %.6f\n\n", get_xz_dissonance(voices, coeff_x, coeff_z, otherVoicesDissonance));
     } else {
       printf("No terrain intersection found.\n\n");
     }
@@ -276,7 +263,8 @@ int main(void) {
     generate_harmonic_series(&voices, base_freq * voice4, 1.0f, MAX_PARTIALS);
     generate_harmonic_series(&voices, base_freq * voice5, 1.0f, MAX_PARTIALS);
     float otherVoicesDissonance = calculate_dissonance(&voices, 2);
-    handle_input(&cameraMesh, &voices, otherVoicesDissonance, worldPlaneSize);
+
+    handle_input(&cameraMesh, &voices, otherVoicesDissonance, worldPlaneSize, maxHeight);
 
     BeginTextureMode(heightmapTexture);
     ClearBackground(BLANK);
@@ -308,7 +296,7 @@ int main(void) {
     int textureUnit = 1;
     SetShaderValue(terrainShader, heightMapLoc, &textureUnit, SHADER_UNIFORM_INT);
 
-    float heightMultiplier = 1.0f;
+    float heightMultiplier = 4.0f;
     SetShaderValue(terrainShader, terrain_heightMultiplierLoc, &heightMultiplier, SHADER_UNIFORM_FLOAT);
 
     Matrix modelView = GetCameraMatrix(cameraMesh);

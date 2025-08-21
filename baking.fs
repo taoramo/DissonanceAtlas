@@ -36,7 +36,7 @@ float getDissonanceAt(float x, float z) {
     float coeff1;
     float coeff2;
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2 * numPartials; i++) {
       if (i / numPartials == 0) {coeff1 = x;}
       else if (i / numPartials == 1) {coeff1 = z;}
       else {coeff1 = 1.0;}

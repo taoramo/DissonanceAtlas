@@ -19,7 +19,7 @@ uniform float worldPlaneSize;
 // Calculates the surface normal using the gradient of the heightmap.
 // This method is independent of the mesh resolution.
 vec3 calculateNormal(vec2 texCoords) {
-    float texelSize = 1.0 / textureSize; // The size of one pixel in texture coordinates
+    float texelSize = 1.0 / textureSize; // The size of onfe pixel in texture coordinates
     float worldTexelSize = worldPlaneSize / textureSize; // The size of one pixel in world coordinates
 
     // Sample the height at the current point and its neighbors
@@ -44,7 +44,7 @@ void main()
     TexCoords = aTexCoords;
 
     float height = texture(heightMap, aTexCoords).r;
-    vec3 displacedPos = aPos + vec3(0.0, height * heightMultiplier, 0.0);
+    vec3 displacedPos = aPos + vec3(0.0, height, 0.0);
     
     ViewFragPos = vec3(modelView * vec4(displacedPos, 1.0));
     ModelFragPos = displacedPos;

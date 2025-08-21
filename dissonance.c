@@ -45,8 +45,8 @@ float get_xz_dissonance(Voices *voices, float coeff_x, float coeff_z, float othe
   for (int i = MAX_PARTIALS; i < 2 * MAX_PARTIALS; i++)
     local_freqs[i] *= coeff_z;
 
-  for (int i = 0; i < 2; i++)
-    for (int j = i + 1; j < voices->count; j++)
+  for (int i = 0; i < 2 * MAX_PARTIALS; i++)
+    for (int j = i + 1; j < voices->count * MAX_PARTIALS; j++)
       xz_dissonance += pairwise_dissonance(local_freqs[i], voices->amps[i], local_freqs[j], voices->amps[j]);
 
   return otherVoicesDissonance + xz_dissonance;
