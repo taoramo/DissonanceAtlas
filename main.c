@@ -2,12 +2,27 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
-#define GL_SILENCE_DEPRECATION
-#include <OpenGL/gl.h>
 #include <OpenGL/gl3.h>
 #include <stdio.h>
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
+
+// Audio structures
+ma_device device;
+ma_waveform sineWave;
+bool isPlaying = false;
+
+// Audio data callback function
+void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount) {
+  if (isPlaying) {
+    ma_waveform_read_pcm_frames(&sineWave, pOutput, frameCount, NULL);
+  } else {
+    // Output silence when not playing
+    memset(pOutput, 0, frameCount * ma_get_bytes_per_frame(pDevice->playback.format, pDevice->playback.channels));
+  }
+}
 
 void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissonance, float worldPlaneSize,
                   float maxHeight) {
@@ -34,7 +49,8 @@ void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissona
       p = Vector3Add(ray.position, Vector3Scale(ray.direction, t));
 
       // Get the terrain height at this XZ position
-      float terrainHeight = get_xz_dissonance(voices, p.x + 0.5 * worldPlaneSize, p.z + 0.5 * worldPlaneSize, otherVoicesDissonance);
+      float terrainHeight =
+          get_xz_dissonance(voices, p.x + 0.5 * worldPlaneSize, p.z + 0.5 * worldPlaneSize, otherVoicesDissonance);
 
       // Check if ray height is below terrain height (considering height multiplier)
       if (p.y <= terrainHeight * maxHeight) { // 50.0f is the height multiplier used in rendering
@@ -57,15 +73,51 @@ void handle_input(Camera3D *cameraMesh, Voices *voices, float otherVoicesDissona
 
       printf("Terrain Sample (Read-Only):\n");
       printf("  Position:      x=%.3f, z=%.3f, y=%.3f\n", intersectionPoint.x, intersectionPoint.z,
-              intersectionPoint.y);
+             intersectionPoint.y);
       printf("  Coefficients:  coeff_x=%.3f, coeff_z=%.3f (converted to 0-4 range)\n", coeff_x, coeff_z);
       printf("  Frequencies:   f_x=%.2f Hz, f_z=%.2f Hz\n", voices->freqs[0] * coeff_x,
-              voices->freqs[MAX_PARTIALS] * coeff_z);
+             voices->freqs[MAX_PARTIALS] * coeff_z);
       printf("  Dissonance:    %.6f\n", dissonance);
     } else {
       printf("No terrain intersection found.\n\n");
     }
   }
+
+  // Toggle sine wave playback when 'T' is pressed
+  if (IsKeyPressed(KEY_T)) {
+    isPlaying = !isPlaying;
+    if (isPlaying) {
+      printf("Sine wave started\n");
+    } else {
+      printf("Sine wave stopped\n");
+    }
+  }
+}
+
+int set_up_audio()
+{
+  // Initialize miniaudio
+  ma_device_config deviceConfig = ma_device_config_init(ma_device_type_playback);
+  deviceConfig.playback.format = ma_format_f32;
+  deviceConfig.playback.channels = 2;
+  deviceConfig.sampleRate = 44100;
+  deviceConfig.dataCallback = data_callback;
+  deviceConfig.pUserData = NULL;
+
+  if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS) {
+    printf("Failed to initialize audio device\n");
+    return 0;
+  }
+
+  ma_waveform_config sineConfig = ma_waveform_config_init(ma_format_f32, 2, 44100, ma_waveform_type_sine, 0.2, 440.0);
+  ma_waveform_init(&sineConfig, &sineWave);
+
+  if (ma_device_start(&device) != MA_SUCCESS) {
+    printf("Failed to start audio device\n");
+    ma_device_uninit(&device);
+    return 0;
+  }
+  return (1);
 }
 
 unsigned int set_up_grid(GLuint *terrainVAO, GLuint *terrainVBO, GLuint *terrainEBO, unsigned int meshResolution,
@@ -188,6 +240,9 @@ int main(void) {
   const int screenHeight = 720;
   const int heightmapResolution = 1200;
   const float worldPlaneSize = 4.0f;
+
+  if (!set_up_audio()) return 1;
+
   InitWindow(screenWidth, screenHeight, "Dissonance Visualizer");
   SetTargetFPS(60);
 
@@ -206,6 +261,7 @@ int main(void) {
     TraceLog(LOG_ERROR, "Failed to load baking shader");
     return 1;
   }
+
   int baking_numVoicesLoc = GetShaderLocation(bakingShader, "numVoices");
   int baking_numPartialsLoc = GetShaderLocation(bakingShader, "numPartials");
   int baking_voiceFreqsLoc = GetShaderLocation(bakingShader, "voiceFreqs");
@@ -219,6 +275,7 @@ int main(void) {
     TraceLog(LOG_ERROR, "Failed to load terrain shader");
     return 1;
   }
+
   int terrain_heightMultiplierLoc = GetShaderLocation(terrainShader, "heightMultiplier");
   int terrain_mvpLoc = GetShaderLocation(terrainShader, "mvp");
   int terrain_modelViewLoc = GetShaderLocation(terrainShader, "modelView");
@@ -326,10 +383,14 @@ int main(void) {
     EndMode3D();
 
     BeginMode2D(camera2d);
+    char voice4freq[8];
+    sprintf(voice4freq, "%.2f", voice4);
     GuiSlider((Rectangle){0.1f * screenWidth, 0.9f * screenHeight, 0.1f * screenWidth, 0.01 * screenHeight}, "voice 4",
-              NULL, &voice4, 0.0f, 4.0f);
+              voice4freq, &voice4, 0.0f, 4.0f);
+    char voice5freq[8];
+    sprintf(voice5freq, "%.2f", voice4);
     GuiSlider((Rectangle){0.1f * screenWidth, 0.92f * screenHeight, 0.1f * screenWidth, 0.01 * screenHeight}, "voice 5",
-              NULL, &voice5, 0.0f, 4.0f);
+              voice5freq, &voice5, 0.0f, 4.0f);
     DrawFPS(screenWidth - 90, 10);
     EndMode2D();
     EndDrawing();
@@ -344,6 +405,9 @@ int main(void) {
   glDeleteVertexArrays(1, &terrainVAO);
   glDeleteBuffers(1, &terrainVBO);
   glDeleteBuffers(1, &terrainEBO);
+
+  // Clean up audio resources
+  ma_device_uninit(&device);
 
   CloseWindow();
 }
