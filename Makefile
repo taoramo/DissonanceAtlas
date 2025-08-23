@@ -1,4 +1,4 @@
-NAME = hello
+NAME = atlas
 MACOS_FLAGS = -framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo
 LIBFLAGS = -lraylib -L.
 CFLAGS = -Wextra -Wall -std=c99 -O3 -DGL_SILENCE_DEPRECATION
