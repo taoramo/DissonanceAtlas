@@ -1,7 +1,8 @@
 NAME = atlas
 MACOS_FLAGS = -framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo
 LIBFLAGS = -lraylib -L.
-CFLAGS = -Wextra -Wall -std=c99 -DGL_SILENCE_DEPRECATION -Wno-unused-parameter -Wno-unused-but-set-variable #-march=native -mfpu=neon -O3
+CFLAGS = -Wextra -Wall -std=c99 -DGL_SILENCE_DEPRECATION -Wno-unused-parameter -Wno-unused-but-set-variable\
+				 -DMA_ENABLE_ONLY_SPECIFIC_BACKENDS -DMA_ENABLE_COREAUDIO -DMA_NO_ENGINE# -march=native -mfpu=neon -O3
 SRC = main.c dissonance.c
 
 all: $(NAME)
